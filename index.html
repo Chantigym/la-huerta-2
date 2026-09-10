@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1b2418">
+<title>La Huerta 2 — del celular a la entrega</title>
+<link rel="stylesheet" href="css/estilo.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="iconos/icono-192.png">
+<link rel="apple-touch-icon" href="iconos/icono-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="La Huerta">
+</head>
+<body>
+
+<header class="tope">
+  <span class="marca">LA<i>·</i>HUERTA</span>
+  <span class="tope-dato" id="dato-lista">sin lista</span>
+  <button class="tope-mas" id="btn-mas" aria-label="Ajustes y respaldo">Más</button>
+</header>
+
+<main id="main">
+
+  <!-- ============ LISTA ============ -->
+  <section class="pantalla" id="p-lista">
+    <div class="soltar" id="zona">
+      <b>Soltá la lista</b>
+      <span>El PDF que bajás del Google Form. También sirve el CSV.</span>
+      <button class="boton grande" id="btn-elegir">Elegir archivo</button>
+      <input type="file" id="archivo" accept=".pdf,.csv" hidden>
+    </div>
+    <div id="estado-carga"></div>
+    <div id="tarjeta-lista"></div>
+  </section>
+
+  <!-- ============ REVISAR ============ -->
+  <section class="pantalla" id="p-revisar" hidden>
+    <div class="franja">
+      <b>Revisar la lista</b>
+      <span id="resumen-revisar"></span>
+    </div>
+    <div id="alerta-revision"></div>
+    <div id="lista-dudosas"></div>
+    <h3 class="titulo">Precios</h3>
+    <p class="ayuda">Tocá un precio para corregirlo. Se recalcula todo.</p>
+    <div id="lista-precios"></div>
+    <div class="cierre-pantalla">
+      <button class="boton grande" id="btn-a-cosecha">Listo, a cosechar</button>
+    </div>
+  </section>
+
+  <!-- ============ COSECHAR ============ -->
+  <section class="pantalla" id="p-cosecha" hidden>
+    <div class="franja pegajosa">
+      <b>Qué cosechar</b>
+      <span id="avance-cosecha"></span>
+      <div class="progreso"><i id="barra-cosecha"></i></div>
+    </div>
+    <div id="hoja-cosecha"></div>
+    <div class="cierre-pantalla no-imprime">
+      <button class="boton" id="btn-copiar-cosecha">Copiar para WhatsApp</button>
+      <details class="plegable">
+        <summary>Ver el texto</summary>
+        <pre id="texto-cosecha"></pre>
+      </details>
+    </div>
+  </section>
+
+  <!-- ============ ARMAR ============ -->
+  <section class="pantalla pantalla-pager" id="p-armado" hidden>
+    <div class="franja pegajosa" id="franja-armado"></div>
+    <div id="hoja-armado"></div>
+    <div class="pager no-imprime" id="pager-armado"></div>
+  </section>
+
+  <!-- ============ COBRAR ============ -->
+  <section class="pantalla pantalla-pager" id="p-cobros" hidden>
+    <div class="franja pegajosa" id="franja-cobros"></div>
+    <div id="aviso-alias" class="no-imprime"></div>
+    <div id="hoja-cobros"></div>
+    <div class="hoja-balance" id="hoja-balance"></div>
+    <div class="pager no-imprime" id="pager-cobros"></div>
+  </section>
+
+  <!-- ============ DEBEN ============ -->
+  <section class="pantalla" id="p-deudas" hidden>
+    <div class="franja">
+      <b>Quién me debe</b>
+      <span id="resumen-deudas"></span>
+    </div>
+    <div id="aviso-historial"></div>
+    <div id="listado-deudas"></div>
+  </section>
+
+</main>
+
+<nav class="barra no-imprime" aria-label="Pantallas">
+  <button class="tab" data-vista="lista" aria-current="true">Lista</button>
+  <button class="tab" data-vista="cosecha" disabled>Cosechar</button>
+  <button class="tab" data-vista="armado" disabled>Armar</button>
+  <button class="tab" data-vista="cobros" disabled>Cobrar</button>
+  <button class="tab" data-vista="deudas">Deben</button>
+</nav>
+
+<!-- ============ MÁS: ajustes, respaldo, papeles ============ -->
+<div class="velo no-imprime" id="velo" hidden></div>
+<aside class="sabana no-imprime" id="sabana" hidden aria-label="Ajustes">
+  <div class="sabana-tope">
+    <b>Más</b>
+    <button class="boton fantasma" id="btn-cerrar-mas">Cerrar</button>
+  </div>
+  <div class="sabana-cuerpo">
+
+    <section class="grupo">
+      <h3>Esta lista</h3>
+      <button class="fila-boton" id="btn-revisar">Revisar precios y dudas<i id="pico-revisar"></i></button>
+      <button class="fila-boton" id="btn-guardar-historial">Guardar la lista en el historial</button>
+      <button class="fila-boton" id="btn-imprimir">Imprimir / Guardar PDF</button>
+      <button class="fila-boton" id="btn-balance">Balance de la semana (PDF)</button>
+    </section>
+
+    <section class="grupo">
+      <h3>Cosecha</h3>
+      <label class="fila-campo">
+        <span>Cosechar de más, para descarte</span>
+        <span class="con-sufijo"><input type="number" id="margen" value="10" min="0" max="100" step="5" inputmode="numeric"><i>%</i></span>
+      </label>
+    </section>
+
+    <section class="grupo">
+      <h3>Orden del recorrido</h3>
+      <p class="ayuda">El primero es el primero que entregás. El auto se carga al revés.</p>
+      <ol class="recorrido" id="recorrido"></ol>
+    </section>
+
+    <section class="grupo">
+      <h3>El mensaje del cobro</h3>
+      <label class="fila-campo columna"><span>Saludo</span><input type="text" id="pl-saludo"></label>
+      <label class="fila-campo columna"><span>Después del total</span><input type="text" id="pl-cierre"></label>
+      <label class="fila-campo columna"><span>Alias para transferir</span><input type="text" id="pl-alias" placeholder="tu.alias"></label>
+    </section>
+
+    <section class="grupo">
+      <h3>Cómo se llaman en el mensaje</h3>
+      <div id="lista-alias"></div>
+    </section>
+
+    <section class="grupo">
+      <h3>Respaldo y papeles</h3>
+      <button class="fila-boton" id="btn-zip">Bajar todas las cuentas como imagen</button>
+      <button class="fila-boton" id="btn-xlsx">Informes en Excel</button>
+      <button class="fila-boton" id="btn-exportar">Bajar respaldo</button>
+      <button class="fila-boton" id="btn-importar">Cargar respaldo</button>
+      <input type="file" id="archivo-respaldo" accept=".json" hidden>
+      <div id="estado-respaldo"></div>
+    </section>
+
+  </div>
+</aside>
+
+<script type="module" src="js/ui/app.js"></script>
+<script>
+  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+    addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+  }
+</script>
+</body>
+</html>

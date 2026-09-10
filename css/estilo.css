@@ -1,0 +1,422 @@
+/* La Huerta 2. Pensada para el celular, parado al lado del auto y con una mano
+   ocupada: todo lo que se toca mide 48px o mas, nada se scrollea de costado y
+   cada pantalla hace una sola cosa.
+
+   La compu no queda afuera: la columna se centra y al imprimir se despliega
+   todo lo que en pantalla se ve de a uno. */
+
+:root {
+  --papel:   #f3f5ef;
+  --tarjeta: #ffffff;
+  --tinta:   #1b2418;
+  --suave:   #5f6a56;
+  --linea:   #d9dfd2;
+  --verde:   #2f6d3a;
+  --verde-p: #e6f0e3;
+  --ambar:   #a96a0d;
+  --ambar-p: #fbf0da;
+  --rojo:    #a3301d;
+  --rojo-p:  #fbe6e2;
+
+  --h-tope: 52px;
+  --h-barra: 60px;
+  --h-pager: 64px;
+  --arriba: calc(var(--h-tope) + env(safe-area-inset-top, 0px));
+  --abajo:  calc(var(--h-barra) + env(safe-area-inset-bottom, 0px));
+
+  --r: 14px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --papel:   #14180f;
+    --tarjeta: #1e2419;
+    --tinta:   #eef2e8;
+    --suave:   #a0ab95;
+    --linea:   #333c2c;
+    --verde:   #6fbf72;
+    --verde-p: #24331f;
+    --ambar:   #e0a64a;
+    --ambar-p: #33280f;
+    --rojo:    #f08a76;
+    --rojo-p:  #351913;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+
+/* Las pantallas se prenden y apagan con el atributo hidden. Como cada una trae
+   su propio display (flex), el "display:none" que el navegador le pone a
+   [hidden] pierde por especificidad y saldrian todas juntas. Esta linea es la
+   que hace que se vea una sola. */
+[hidden] { display: none !important; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  padding: var(--arriba) 0 var(--abajo);
+  background: var(--papel);
+  color: var(--tinta);
+  font: 17px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+h3 { margin: 0; font-size: 1rem; }
+pre { margin: 0; font: 15px/1.5 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; white-space: pre-wrap; }
+
+/* ---------- barra de arriba ---------- */
+.tope {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 40;
+  height: var(--arriba);
+  padding: env(safe-area-inset-top, 0px) 12px 0;
+  display: flex; align-items: center; gap: 10px;
+  background: var(--tinta); color: var(--papel);
+}
+.marca { font-weight: 800; letter-spacing: .09em; font-size: .8rem; }
+.marca i { font-style: normal; opacity: .55; }
+.tope-dato { flex: 1; min-width: 0; font-size: .78rem; opacity: .72; text-align: right;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tope-mas {
+  flex: none; height: 36px; padding: 0 14px; border: 0; border-radius: 10px;
+  background: rgba(255,255,255,.14); color: inherit; font: inherit; font-size: .85rem; font-weight: 600;
+}
+
+/* ---------- pantallas ---------- */
+main { max-width: 640px; margin: 0 auto; }
+.pantalla { padding: 12px 12px 24px; display: flex; flex-direction: column; gap: 12px; }
+.pantalla-pager { padding-bottom: calc(var(--h-pager) + 16px); }
+.titulo { margin: 6px 2px 0; }
+.ayuda { margin: 0 2px; color: var(--suave); font-size: .85rem; }
+
+/* La franja de contexto: que estas mirando y cuanto te falta. */
+.franja {
+  background: var(--tarjeta); border: 1px solid var(--linea); border-radius: var(--r);
+  padding: 12px 14px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px;
+}
+.franja b { font-size: 1.05rem; }
+.franja span { color: var(--suave); font-size: .87rem; }
+.franja .der { margin-left: auto; font-variant-numeric: tabular-nums; }
+.pegajosa { position: sticky; top: calc(var(--arriba) + 4px); z-index: 20; }
+
+.progreso { flex-basis: 100%; height: 6px; border-radius: 3px; background: var(--linea); overflow: hidden; }
+.progreso i { display: block; height: 100%; width: 0; background: var(--verde); transition: width .18s; }
+
+/* ---------- botones ---------- */
+.boton {
+  min-height: 52px; padding: 0 20px; border: 0; border-radius: 12px;
+  background: var(--verde); color: #fff; font: inherit; font-weight: 650;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  cursor: pointer; text-decoration: none;
+}
+@media (prefers-color-scheme: dark) { .boton { color: #10180d; } }
+.boton.grande { width: 100%; min-height: 58px; font-size: 1.05rem; }
+.boton.fantasma { background: transparent; color: var(--tinta); border: 1.5px solid var(--linea); }
+.boton:disabled { opacity: .4; }
+.boton:active { transform: translateY(1px); }
+
+.cierre-pantalla { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+
+.fila-boton {
+  width: 100%; min-height: 54px; padding: 0 14px; text-align: left;
+  border: 1px solid var(--linea); border-radius: 12px; background: var(--tarjeta);
+  color: var(--tinta); font: inherit; display: flex; align-items: center; gap: 10px; cursor: pointer;
+}
+.fila-boton i { margin-left: auto; font-style: normal; font-size: .8rem; font-weight: 700; }
+
+/* ---------- cargar la lista ---------- */
+.soltar {
+  background: var(--tarjeta); border: 2px dashed var(--linea); border-radius: var(--r);
+  padding: 30px 18px; text-align: center; display: flex; flex-direction: column; gap: 8px; align-items: center;
+}
+.soltar b { font-size: 1.25rem; }
+.soltar span { color: var(--suave); font-size: .9rem; max-width: 30ch; }
+.soltar .boton { margin-top: 8px; }
+.soltar.encima { border-color: var(--verde); background: var(--verde-p); }
+
+.cifras { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cifra {
+  background: var(--tarjeta); border: 1px solid var(--linea); border-radius: 12px; padding: 12px 14px;
+  display: flex; flex-direction: column;
+}
+.cifra b { font-size: 1.7rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.cifra span { color: var(--suave); font-size: .8rem; }
+.cifra.alerta b { color: var(--ambar); }
+.cifra.mal b { color: var(--rojo); }
+
+/* ---------- avisos ---------- */
+.aviso { border-radius: 12px; padding: 12px 14px; font-size: .92rem; border: 1px solid transparent; }
+.aviso.ok     { background: var(--verde-p); border-color: var(--verde); }
+.aviso.revisar{ background: var(--ambar-p); border-color: var(--ambar); }
+.aviso.mal    { background: var(--rojo-p);  border-color: var(--rojo); }
+button.aviso { display: block; width: 100%; text-align: left; font: inherit; font-size: .92rem; color: var(--tinta); cursor: pointer; }
+
+/* ---------- listas de cosas ---------- */
+.tarjeta {
+  background: var(--tarjeta); border: 1px solid var(--linea); border-radius: var(--r);
+  overflow: hidden;
+}
+.rubro { margin: 14px 2px 2px; font-size: .78rem; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--suave); }
+.subrubro { margin: 0 2px 6px; font-size: .85rem; color: var(--suave); }
+
+/* La fila que se tilda. Casi toda la fila es el boton: no hay que apuntarle a
+   un cuadradito. La balanza y el precio quedan afuera del boton, porque un
+   <input> adentro de un <button> no se puede tocar. */
+.item {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  border-top: 1px solid var(--linea);
+}
+.tarjeta > .item:first-child { border-top: 0; }
+.item > .zona {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px;
+  min-height: 62px; padding: 10px 8px 10px 14px; text-align: left;
+  background: none; border: 0; color: inherit; font: inherit; cursor: pointer;
+}
+.item > .zona:last-child { padding-right: 14px; }
+.item > .plata:last-child, .item > .balanza:last-child { margin-right: 14px; }
+
+/* Lo que se pesa ocupa dos renglones: arriba el nombre entero, abajo la
+   balanza y el precio. En 390px meter todo en una linea le comia el nombre
+   ("Zanahori") y dejaba el campo de la balanza del ancho de un poroto. */
+.item.pesa { flex-wrap: wrap; padding-bottom: 10px; }
+.item.pesa > .zona { flex: 1 1 100%; padding-bottom: 2px; }
+.item.pesa > .balanza { margin-left: 42px; }
+.item.pesa > .plata { margin-left: auto; margin-right: 14px; }
+.nombre { overflow-wrap: anywhere; }
+
+.tilde {
+  flex: none; width: 30px; height: 30px; border-radius: 9px;
+  border: 2px solid var(--suave); background: transparent;
+  display: grid; place-items: center;
+}
+.tilde::after {
+  content: ""; width: 15px; height: 9px; margin-top: -4px;
+  border-left: 3px solid #fff; border-bottom: 3px solid #fff;
+  transform: rotate(-45deg) scale(.5); opacity: 0; transition: .12s;
+}
+.item.listo .tilde { background: var(--verde); border-color: var(--verde); }
+.item.listo .tilde::after { opacity: 1; transform: rotate(-45deg) scale(1); }
+@media (prefers-color-scheme: dark) {
+  .tilde::after { border-color: #10180d; }
+}
+.item.listo .cuerpo { opacity: .5; }
+.item.listo .nombre { text-decoration: line-through; }
+
+.cantidad {
+  flex: none; min-width: 3.2rem; text-align: right;
+  font-size: 1.3rem; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.cantidad i { display: block; font-style: normal; font-size: .68rem; font-weight: 600;
+  color: var(--suave); text-transform: uppercase; letter-spacing: .04em; }
+.cuerpo { flex: 1; min-width: 0; }
+.nombre { display: block; }
+.nota { display: block; color: var(--ambar); font-size: .84rem; }
+.detalle { display: block; color: var(--suave); font-size: .8rem; }
+.plata { flex: none; font-variant-numeric: tabular-nums; font-weight: 650; }
+.plata.estimado { color: var(--ambar); }
+
+/* la balanza: se toca sola, sin tildar la fila */
+.balanza { flex: none; display: flex; align-items: center; gap: 4px; }
+.balanza input {
+  width: 5.2rem; min-height: 46px; padding: 0 8px; text-align: right;
+  border: 1.5px solid var(--linea); border-radius: 10px;
+  background: var(--papel); color: var(--tinta); font: inherit; font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+.balanza input.cargado { border-color: var(--verde); background: var(--verde-p); font-weight: 650; }
+.balanza i { font-style: normal; color: var(--suave); font-size: .8rem; }
+
+/* ---------- armar: una bolsa por vez ---------- */
+.pager-item { display: none; }
+.pager-item.actual { display: block; }
+
+.bolsa-tope { display: flex; align-items: baseline; gap: 8px; padding: 2px 2px 8px; flex-wrap: wrap; }
+.bolsa-tope .quien { font-size: 1.35rem; font-weight: 700; }
+.bolsa-tope .total { margin-left: auto; font-size: 1.2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bolsa-tope .donde { flex-basis: 100%; color: var(--suave); font-size: .85rem; }
+
+.pager {
+  position: fixed; left: 0; right: 0; bottom: var(--abajo); z-index: 30;
+  height: var(--h-pager); padding: 6px 10px;
+  display: flex; align-items: center; gap: 8px;
+  background: var(--tarjeta); border-top: 1px solid var(--linea);
+}
+.pager button {
+  min-height: 50px; border-radius: 12px; border: 1.5px solid var(--linea);
+  background: var(--papel); color: var(--tinta); font: inherit; font-weight: 650; cursor: pointer;
+}
+.pager .mover { flex: none; width: 58px; font-size: 1.2rem; }
+.pager .medio { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border: 0; background: none; min-height: 50px; }
+.pager .medio b { font-size: .95rem; font-variant-numeric: tabular-nums; }
+.pager .medio span { font-size: .74rem; color: var(--suave); }
+.pager button:disabled { opacity: .35; }
+.pager .hecho { background: var(--verde); border-color: var(--verde); color: #fff; }
+@media (prefers-color-scheme: dark) { .pager .hecho { color: #10180d; } }
+
+/* ---------- cobrar ---------- */
+.cuenta-tope { display: flex; align-items: baseline; gap: 8px; padding: 2px 2px 10px; flex-wrap: wrap; }
+.cuenta-tope .quien { font-size: 1.35rem; font-weight: 700; }
+.cuenta-tope .total { margin-left: auto; font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.cuenta-tope .tel { flex-basis: 100%; color: var(--suave); font-size: .85rem; }
+.mensaje {
+  background: var(--tarjeta); border: 1px solid var(--linea); border-radius: var(--r);
+  padding: 14px; margin-bottom: 10px;
+}
+.pager-item.enviada .mensaje { border-color: var(--verde); background: var(--verde-p); }
+.acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.acciones .ancho { grid-column: 1 / -1; }
+.sello { display: inline-flex; align-items: center; gap: 5px; color: var(--verde); font-size: .82rem; font-weight: 650; }
+
+/* ---------- deben ---------- */
+.deudor { background: var(--tarjeta); border: 1px solid var(--linea); border-radius: var(--r); padding: 12px 14px; }
+.deudor + .deudor { margin-top: 10px; }
+.deudor-tope { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.deudor-tope .quien { font-weight: 700; font-size: 1.1rem; }
+.deudor-tope .tel { color: var(--suave); font-size: .8rem; }
+.deudor-tope .debe { margin-left: auto; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--rojo); }
+.deudor-tope .debe.afavor { color: var(--verde); }
+.deudor-lista { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding-top: 10px; margin-top: 10px; border-top: 1px solid var(--linea); }
+.deudor-lista .cuando { font-size: .85rem; color: var(--suave); }
+.deudor-lista .monto { margin-left: auto; font-variant-numeric: tabular-nums; font-size: .9rem; }
+.estados { display: flex; gap: 6px; flex-basis: 100%; }
+.estados button {
+  flex: 1; min-height: 46px; border-radius: 10px; border: 1.5px solid var(--linea);
+  background: var(--papel); color: var(--suave); font: inherit; font-size: .85rem; cursor: pointer;
+}
+.estados button[aria-pressed="true"] { background: var(--verde); border-color: var(--verde); color: #fff; font-weight: 650; }
+@media (prefers-color-scheme: dark) { .estados button[aria-pressed="true"] { color: #10180d; } }
+
+.vacio { background: var(--tarjeta); border: 1px solid var(--linea); border-radius: var(--r);
+  padding: 26px 18px; text-align: center; display: flex; flex-direction: column; gap: 6px; }
+.vacio b { font-size: 1.1rem; }
+.vacio span { color: var(--suave); font-size: .9rem; }
+
+/* ---------- precios (revisar) ---------- */
+.precio-fila { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--linea); }
+.tarjeta > .precio-fila:first-child { border-top: 0; }
+.precio-fila .cuerpo b { display: block; }
+.precio-fila input {
+  flex: none; width: 6rem; min-height: 48px; padding: 0 8px; text-align: right;
+  border: 1.5px solid var(--linea); border-radius: 10px;
+  background: var(--papel); color: var(--tinta); font: inherit; font-variant-numeric: tabular-nums;
+}
+.precio-fila input.editado { border-color: var(--verde); background: var(--verde-p); }
+.punto { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; background: var(--suave); }
+.punto.ambar { background: var(--ambar); }
+.punto.rojo { background: var(--rojo); }
+.crudo { color: var(--suave); font-size: .8rem; word-break: break-word; }
+
+/* ---------- barra de abajo ---------- */
+.barra {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  height: var(--abajo); padding-bottom: env(safe-area-inset-bottom, 0px);
+  display: flex; background: var(--tarjeta); border-top: 1px solid var(--linea);
+}
+.tab {
+  flex: 1; border: 0; background: none; color: var(--suave); font: inherit; font-size: .78rem;
+  font-weight: 600; cursor: pointer; position: relative; padding: 0 2px;
+}
+.tab[aria-current="true"] { color: var(--verde); }
+.tab[aria-current="true"]::before {
+  content: ""; position: absolute; top: 0; left: 22%; right: 22%; height: 3px;
+  border-radius: 0 0 3px 3px; background: var(--verde);
+}
+.tab:disabled { opacity: .35; }
+
+/* ---------- sabana de "Mas" ---------- */
+.velo { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.45); }
+.sabana {
+  position: fixed; z-index: 51; left: 0; right: 0; bottom: 0; max-height: 88vh;
+  display: flex; flex-direction: column;
+  background: var(--papel); border-radius: 18px 18px 0 0; box-shadow: 0 -8px 30px rgba(0,0,0,.22);
+}
+.sabana-tope {
+  display: flex; align-items: center; gap: 10px; padding: 14px 14px 10px;
+  border-bottom: 1px solid var(--linea);
+}
+.sabana-tope b { font-size: 1.1rem; }
+.sabana-tope .boton { margin-left: auto; min-height: 44px; }
+.sabana-cuerpo { overflow-y: auto; padding: 4px 14px calc(20px + env(safe-area-inset-bottom, 0px)); -webkit-overflow-scrolling: touch; }
+.grupo { padding: 16px 0; border-bottom: 1px solid var(--linea); display: flex; flex-direction: column; gap: 8px; }
+.grupo:last-child { border-bottom: 0; }
+.grupo h3 { font-size: .78rem; letter-spacing: .1em; text-transform: uppercase; color: var(--suave); }
+
+.fila-campo { display: flex; align-items: center; gap: 10px; min-height: 52px; font-size: .95rem; }
+.fila-campo.columna { flex-direction: column; align-items: stretch; gap: 4px; }
+.fila-campo > span { color: var(--suave); font-size: .85rem; }
+.fila-campo input {
+  min-height: 48px; padding: 0 12px; border: 1.5px solid var(--linea); border-radius: 10px;
+  background: var(--tarjeta); color: var(--tinta); font: inherit;
+}
+.fila-campo.columna input { width: 100%; }
+.con-sufijo { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.con-sufijo input { width: 5rem; text-align: right; }
+.con-sufijo i { font-style: normal; color: var(--suave); }
+
+.recorrido { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.recorrido li {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  background: var(--tarjeta); border: 1px solid var(--linea); border-radius: 10px;
+}
+.recorrido .nombre-punto { flex: 1; min-width: 0; font-size: .92rem; }
+.recorrido .cuenta { color: var(--suave); font-size: .75rem; }
+.recorrido .mover { width: 46px; min-height: 44px; border-radius: 9px; border: 1.5px solid var(--linea);
+  background: var(--papel); color: var(--tinta); font-size: 1.1rem; cursor: pointer; }
+.recorrido .mover:disabled { opacity: .3; }
+
+.alias-fila { display: flex; align-items: center; gap: 10px; }
+.alias-fila .de { flex: 1; min-width: 0; font-size: .92rem; }
+.alias-fila .de small { display: block; color: var(--ambar); font-size: .76rem; }
+.alias-fila input {
+  flex: none; width: 8rem; min-height: 48px; padding: 0 10px;
+  border: 1.5px solid var(--linea); border-radius: 10px;
+  background: var(--tarjeta); color: var(--tinta); font: inherit;
+}
+.alias-fila input.guardado { border-color: var(--verde); }
+.alias-fila input.choca { border-color: var(--ambar); background: var(--ambar-p); }
+
+.plegable { background: var(--tarjeta); border: 1px solid var(--linea); border-radius: 12px; }
+.plegable > summary { min-height: 50px; display: flex; align-items: center; padding: 0 14px;
+  cursor: pointer; font-size: .9rem; color: var(--suave); }
+.plegable > pre { padding: 0 14px 14px; }
+
+/* el balance solo existe para el papel */
+.hoja-balance { display: none; }
+.balance-fila { display: flex; gap: 10px; padding: 3pt 0; border-bottom: 1px solid var(--linea); }
+.balance-fila .quien { flex: 1; }
+.balance-fila .monto { font-variant-numeric: tabular-nums; }
+.balance-fila.subtotal { font-weight: 700; border-bottom: 2px solid var(--tinta); }
+.balance-punto { margin: 10pt 0 2pt; font-weight: 700; }
+.balance-total { display: flex; gap: 10px; padding-top: 6pt; font-size: 1.1em; }
+.balance-total .monto { margin-left: auto; font-weight: 800; }
+
+/* ---------- papel ---------- */
+@media print {
+  :root { --arriba: 0px; --abajo: 0px; }
+  body { padding: 0; background: #fff; color: #000; font-size: 11pt; }
+  .tope, .barra, .pager, .velo, .sabana, .no-imprime, .soltar, .cierre-pantalla { display: none !important; }
+  .pantalla { padding: 0; gap: 8px; }
+  .pantalla-pager { padding-bottom: 0; }
+  .pegajosa { position: static; }
+  /* en la pantalla se ve de a uno; en papel, todo. */
+  .pager-item { display: block !important; break-inside: avoid; margin-bottom: 10pt; }
+  .tarjeta, .franja, .mensaje, .deudor { border-color: #bbb; break-inside: avoid; }
+  .item { min-height: 0; padding: 3pt 6pt; }
+  .tilde { width: 14px; height: 14px; border-color: #888; }
+  body.imprimir-balance .pantalla > *:not(.hoja-balance) { display: none !important; }
+  body.imprimir-balance .hoja-balance { display: block; }
+}
+
+@media (min-width: 700px) {
+  .barra, .pager { max-width: 640px; left: 50%; transform: translateX(-50%);
+    border-radius: 14px 14px 0 0; border: 1px solid var(--linea); }
+  .sabana { max-width: 640px; left: 50%; transform: translateX(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }

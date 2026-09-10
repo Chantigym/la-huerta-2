@@ -1,0 +1,18 @@
+{
+  "name": "La Huerta 2 — cosechar, armar y cobrar",
+  "short_name": "La Huerta 2",
+  "description": "Del PDF de la lista a la entrega, desde el celular: qué cosechar, una bolsa por vez, y una cuenta por vez para mandar.",
+  "lang": "es-AR",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f3f5ef",
+  "theme_color": "#1b2418",
+  "icons": [
+    { "src": "iconos/icono-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "iconos/icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "iconos/icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
