@@ -159,6 +159,44 @@
   </div>
 </aside>
 
+<!-- ============ UN PRODUCTO DE LA BOLSA: precio y quitar ============ -->
+<aside class="sabana no-imprime" id="hoja-item" hidden aria-label="Ese producto">
+  <div class="sabana-tope">
+    <b id="item-titulo"></b>
+    <button class="boton fantasma" data-cerrar>Cerrar</button>
+  </div>
+  <div class="sabana-cuerpo" id="item-cuerpo"></div>
+</aside>
+
+<!-- ============ AGREGAR UN PRODUCTO A LA BOLSA ============ -->
+<aside class="sabana no-imprime" id="hoja-agregar" hidden aria-label="Agregar un producto">
+  <div class="sabana-tope">
+    <b id="agregar-titulo">Agregar a la bolsa</b>
+    <button class="boton fantasma" data-cerrar>Cerrar</button>
+  </div>
+  <div class="sabana-cuerpo">
+    <input type="search" id="buscar-producto" class="buscador" placeholder="Buscar en la lista" autocomplete="off">
+    <div id="lista-agregar"></div>
+    <details class="plegable" id="otro-producto">
+      <summary>Otro, que no está en la lista</summary>
+      <div class="otro-cuerpo">
+        <label class="fila-campo columna"><span>Qué es</span>
+          <input type="text" id="nuevo-nombre" placeholder="Dulce de leche"></label>
+        <div class="par">
+          <label class="fila-campo columna"><span>Cuánto</span>
+            <input type="number" id="nuevo-cantidad" value="1" min="0" step="0.5" inputmode="decimal"></label>
+          <label class="fila-campo columna"><span>Unidad</span>
+            <input type="text" id="nuevo-unidad" placeholder="frasco"></label>
+        </div>
+        <label class="fila-campo columna"><span>Cuánto le cobrás en total</span>
+          <input type="number" id="nuevo-precio" min="0" step="50" inputmode="numeric" placeholder="4500"></label>
+        <button class="boton" id="btn-nuevo">Agregar a la bolsa</button>
+        <p class="ayuda" id="nuevo-aviso"></p>
+      </div>
+    </details>
+  </div>
+</aside>
+
 <script type="module" src="js/ui/app.js"></script>
 <script>
   if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {

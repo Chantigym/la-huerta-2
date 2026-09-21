@@ -7,7 +7,7 @@
 // Si tocás este archivo, subile el número a VERSION o el navegador sigue
 // usando lo viejo.
 
-const VERSION = 'lahuerta2-v1';
+const VERSION = 'lahuerta2-v2';
 
 const BASICOS = [
   './',

@@ -23,7 +23,7 @@ import { informePedidos, recalcularPedido } from '../core/pedidos.js';
 import { informeCobros, linkWhatsApp, productosSinAlias, balancePorPunto, PLANTILLAS } from '../core/cobros.js';
 import { ordenarParaBolsa } from '../core/categorias.js';
 import { calcularItem, totalPedido } from '../core/precios.js';
-import { moneda, fecha } from '../core/formato.js';
+import { moneda, fecha, sinAcentos } from '../core/formato.js';
 import { cuentaAJPG, nombreArchivo } from '../img/cuenta-jpg.js';
 import { armarZip } from '../img/zip.js';
 import { quienMeDebe, resumenParaHistorial, ESTADOS } from '../core/cuentacorriente.js';
@@ -61,6 +61,12 @@ const estado = {
   iBolsa: 0,
   iCuenta: 0,
   vista: 'lista',
+
+  // Lo que se toca a mano en el armado, cuando la realidad no coincide con
+  // el form: el producto que no hubo, el que agregaste de más, la rebaja.
+  quitados: new Map(),         // clave -> el item, guardado para poder devolverlo
+  preciosManuales: new Map(),  // clave -> precio puesto a mano
+  agregados: [],               // los que no vinieron por el form
 };
 
 // ---------- navegación ----------
@@ -92,20 +98,26 @@ function habilitar(vista, si) {
   if (t) t.disabled = !si;
 }
 
-// ---------- la sábana de "Más" ----------
-function abrirMas(foco) {
+// ---------- las sábanas: "Más", un producto, agregar ----------
+// Son tres hojas que suben desde abajo y comparten el velo. Siempre hay una
+// sola abierta: abrir una cierra la anterior.
+function abrirSabana(id, foco) {
+  $$('.sabana').forEach((s) => { s.hidden = s.id !== id.replace('#', ''); });
   $('#velo').hidden = false;
-  $('#sabana').hidden = false;
   if (foco) setTimeout(() => { const e = $(foco); if (e) { e.focus(); e.scrollIntoView({ block: 'center' }); } }, 60);
 }
-function cerrarMas() {
+function cerrarSabanas() {
   $('#velo').hidden = true;
-  $('#sabana').hidden = true;
+  $$('.sabana').forEach((s) => { s.hidden = true; });
 }
+const abrirMas = (foco) => abrirSabana('#sabana', foco);
+const cerrarMas = cerrarSabanas;
+
 $('#btn-mas').addEventListener('click', () => abrirMas());
-$('#btn-cerrar-mas').addEventListener('click', cerrarMas);
-$('#velo').addEventListener('click', cerrarMas);
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrarMas(); });
+$('#btn-cerrar-mas').addEventListener('click', cerrarSabanas);
+$$('[data-cerrar]').forEach((b) => b.addEventListener('click', cerrarSabanas));
+$('#velo').addEventListener('click', cerrarSabanas);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrarSabanas(); });
 
 // ---------- 1. cargar la lista ----------
 const zona = $('#zona');
@@ -141,6 +153,9 @@ async function cargar(archivo) {
     estado.ordenPuntos = estado.lista.puntos.map((p) => p.codigo);
     estado.iBolsa = 0;
     estado.iCuenta = 0;
+    estado.quitados = new Map();
+    estado.preciosManuales = new Map();
+    estado.agregados = [];
 
     await recuperarConfig();
     await recuperarAvance();
@@ -429,7 +444,9 @@ function pintarArmado() {
 }
 
 function bolsaLista(pedido) {
-  return pedido.items.length > 0 && pedido.items.every((i) => estado.tildes.has(claveItem(pedido, i)));
+  // Una bolsa a la que le sacaste todo está lista: no queda nada que poner.
+  if (!pedido.items.length) return true;
+  return pedido.items.every((i) => estado.tildes.has(claveItem(pedido, i)));
 }
 
 function tarjetaDeBolsa(punto, pedido, porColumna) {
@@ -463,6 +480,34 @@ function tarjetaDeBolsa(punto, pedido, porColumna) {
   // De lo más pesado a lo más liviano: la papa al fondo, los huevos arriba.
   for (const item of ordenarParaBolsa(pedido.items, porColumna)) {
     caja.append(filaDeItem(pedido, item, refrescar));
+  }
+  if (!pedido.items.length) {
+    caja.append(crear('div', { className: 'vacio', innerHTML: '<b>Esta bolsa quedó vacía</b>' }));
+  }
+
+  // Lo que no vino por el form: se agrega acá, en la bolsa de esta persona.
+  const agregar = crear('button', { className: 'fila-boton agregar no-imprime', textContent: '+  Agregar un producto' });
+  agregar.addEventListener('click', () => abrirAgregar(pedido));
+  art.append(agregar);
+
+  // Lo que sacaste queda a la vista, tachado, para poder devolverlo.
+  const sacados = [...estado.quitados.entries()]
+    .filter(([clave]) => clave.startsWith(pedido.claveCliente + '#'));
+  if (sacados.length) {
+    const tira = crear('div', { className: 'quitados no-imprime' });
+    tira.append(crear('b', { textContent: plural(sacados.length, 'producto sacado', 'productos sacados') }));
+    for (const [clave, item] of sacados) {
+      const fila = crear('div', { className: 'quitado' });
+      fila.append(crear('span', {
+        textContent: `${numero(item.cantidad)} ${item.unidad || item.unidadCol || ''} ${item.nombreCorto}`.replace(/\s+/g, ' '),
+      }));
+      const volver = crear('button', { textContent: 'Devolver' });
+      volver.setAttribute('aria-label', 'Devolver ' + item.nombreCorto + ' a la bolsa de ' + pedido.nombre);
+      volver.addEventListener('click', () => devolverItem(pedido, clave));
+      fila.append(volver);
+      tira.append(fila);
+    }
+    art.append(tira);
   }
 
   // Lo que va a granel a este punto, para cargar el auto sin abrir las bolsas.
@@ -511,16 +556,25 @@ function filaDeItem(pedido, item, refrescar) {
 
   fila.append(zona);
 
-  const precio = crear('span', { className: 'plata' + (item.estimado ? ' estimado' : '') });
-  precio.textContent = moneda(item.precioFinal);
-  item._pintarPrecio = () => {
-    precio.textContent = moneda(item.precioFinal);
-    precio.classList.toggle('estimado', Boolean(item.estimado));
-  };
+  // El precio se toca: ahí adentro está la rebaja y el "no hubo".
+  const precio = crear('button', { className: 'plata' });
+  precio.setAttribute('aria-label', `Precio de ${item.nombreCorto}. Tocá para rebajarlo o para sacarlo de la bolsa.`);
+  precio.addEventListener('click', () => abrirItem(pedido, item, refrescar));
+  item._pintarPrecio = () => pintarBotonPrecio(precio, item);
+  item._pintarPrecio();
 
   if (item.sePesa) fila.append(balanzaDe(pedido, item, refrescar));
   fila.append(precio);
   return fila;
+}
+
+function pintarBotonPrecio(boton, item) {
+  boton.innerHTML = '';
+  boton.append(crear('span', { textContent: moneda(item.precioFinal) }));
+  const aMano = item.precioManual !== null && item.precioManual !== undefined;
+  if (aMano) boton.append(crear('i', { textContent: 'a mano' }));
+  boton.classList.toggle('estimado', Boolean(item.estimado) && !aMano);
+  boton.classList.toggle('a-mano', aMano);
 }
 
 /** Peso real. Teclado numérico, y el precio se recalcula al toque. */
@@ -555,6 +609,309 @@ function balanzaDe(pedido, item, refrescar) {
 
   caja.append(campo, crear('i', { textContent: 'kg' }));
   return caja;
+}
+
+// ---------- cuando la realidad no coincide con el form ----------
+// Tres cosas que pasan siempre al armar: no hubo un producto, alguien pide
+// algo que no pidió por el form, o le hacés una rebaja. Las tres viven acá,
+// atrás del precio de cada renglón.
+
+/** Lo que saldría este ítem si no hubiera un precio puesto a mano. */
+function precioAutomatico(item) {
+  const col = estado.lista.columnas.find((c) => c.indice === item.columnaIndice);
+  const calc = calcularItem({ ...item, precioManual: null }, col, item.pesoReal);
+  return calc ? calc.precio : 0;
+}
+
+/** Recalcula un ítem solo, respetando el precio a mano si lo tiene. */
+function recalcularItem(item) {
+  const col = estado.lista.columnas.find((c) => c.indice === item.columnaIndice);
+  const calc = calcularItem(item, col, item.pesoReal);
+  if (!calc) return;
+  item.precioFinal = calc.precio;
+  item.estimado = calc.estimado;
+  item.basePrecio = calc.base;
+}
+
+function ponerPrecio(pedido, item, valor) {
+  const clave = claveItem(pedido, item);
+  if (valor === null) {
+    item.precioManual = null;
+    estado.preciosManuales.delete(clave);
+  } else {
+    item.precioManual = valor;
+    estado.preciosManuales.set(clave, valor);
+  }
+  recalcularItem(item);
+  // El total de la bolsa se rehace acá mismo: si lo dejáramos para el que
+  // llama, alcanza con que uno se olvide para que la bolsa muestre un número
+  // viejo. El total siempre sale de las líneas.
+  recalcularPedido(pedido);
+  guardarLuego();
+}
+
+/** El índice de la próxima columna inventada. Sale de lo que ya agregaste, no
+ *  de un contador aparte: así no se puede desincronizar ni repetir una clave. */
+function proximoIdLibre() {
+  const usados = estado.agregados.map((a) => a.columnaIndice).filter((n) => n < 0);
+  return usados.length ? Math.min(...usados) - 1 : -1;
+}
+
+let itemAbierto = null;
+
+function abrirItem(pedido, item, refrescar) {
+  itemAbierto = { pedido, item, refrescar };
+  $('#item-titulo').textContent = item.nombreCorto;
+
+  const cuerpo = $('#item-cuerpo');
+  cuerpo.innerHTML = '';
+  cuerpo.append(crear('p', {
+    className: 'item-donde',
+    textContent: `${numero(item.cantidad)} ${item.unidad || item.unidadCol || ''} · en la bolsa de ${pedido.nombre}`.replace(/\s+/g, ' '),
+  }));
+
+  // --- el precio ---
+  const gPrecio = crear('section', { className: 'grupo' });
+  gPrecio.append(crear('h3', { textContent: 'Precio' }));
+
+  const campo = crear('input', {
+    type: 'number', inputMode: 'numeric', min: '0', step: '50',
+    value: String(item.precioFinal),
+  });
+  campo.setAttribute('aria-label', 'Cuánto le cobrás por ' + item.nombreCorto);
+  const lab = crear('label', { className: 'fila-campo columna' });
+  lab.append(crear('span', { textContent: 'Cuánto le cobrás' }), campo);
+  gPrecio.append(lab);
+
+  const nota = crear('p', { className: 'ayuda' });
+  const volver = crear('button', { className: 'fila-boton', textContent: 'Volver al precio de lista' });
+
+  const refrescarHoja = () => {
+    const auto = precioAutomatico(item);
+    const aMano = item.precioManual !== null && item.precioManual !== undefined;
+    nota.textContent = aMano
+      ? `Puesto a mano. Solo, saldría ${moneda(auto)}. No se mueve aunque cargues los kilos.`
+      : (item.sePesa && item.pesoReal
+        ? `Sale de la balanza: ${numero(item.pesoReal)} kg.`
+        : 'Sale de la lista. Si lo cambiás acá, queda fijo.');
+    volver.hidden = !aMano;
+    campo.value = String(item.precioFinal);
+    if (item._pintarPrecio) item._pintarPrecio();
+    if (refrescar) refrescar();
+  };
+
+  const aplicar = () => {
+    const v = campo.value.trim();
+    if (v === '') return;
+    const n = Number(v.replace(',', '.'));
+    if (!Number.isFinite(n) || n < 0) return;
+    // Si le ponés exactamente lo que ya salía, no hace falta fijarlo.
+    ponerPrecio(pedido, item, n === precioAutomatico(item) ? null : n);
+    refrescarHoja();
+  };
+  campo.addEventListener('change', aplicar);
+
+  volver.addEventListener('click', () => { ponerPrecio(pedido, item, null); refrescarHoja(); });
+  gPrecio.append(nota, volver);
+  cuerpo.append(gPrecio);
+
+  // --- cuánto, solo para lo que agregaste vos ---
+  if (item.agregado) {
+    const gCant = crear('section', { className: 'grupo' });
+    gCant.append(crear('h3', { textContent: 'Cuánto' }));
+    const cc = crear('input', {
+      type: 'number', inputMode: 'decimal', min: '0', step: '0.5', value: String(item.cantidad),
+    });
+    cc.setAttribute('aria-label', 'Cuánto de ' + item.nombreCorto);
+    const lc = crear('label', { className: 'fila-campo columna' });
+    lc.append(crear('span', { textContent: 'Cantidad' }), cc);
+    gCant.append(lc);
+    cc.addEventListener('change', () => {
+      const n = Number(cc.value.replace(',', '.'));
+      if (!Number.isFinite(n) || n <= 0) return;
+      item.cantidad = n;
+      item.cantidadCosecha = n;
+      const reg = estado.agregados.find((a) =>
+        a.claveCliente === pedido.claveCliente && a.columnaIndice === item.columnaIndice);
+      if (reg) reg.cantidad = n;
+      recalcularItem(item);
+      guardarLuego();
+      cerrarSabanas();
+      pintarArmado();
+    });
+    cuerpo.append(gCant);
+  }
+
+  // --- sacarlo ---
+  const gQuitar = crear('section', { className: 'grupo' });
+  gQuitar.append(crear('h3', { textContent: 'Si no hubo' }));
+  const quitar = crear('button', { className: 'fila-boton peligro', textContent: 'Sacar de la bolsa' });
+  quitar.addEventListener('click', () => quitarItem(pedido, item));
+  gQuitar.append(quitar);
+  gQuitar.append(crear('p', {
+    className: 'ayuda',
+    textContent: 'Deja de sumar al total y no aparece en el mensaje del cobro. Lo podés devolver.',
+  }));
+  cuerpo.append(gQuitar);
+
+  refrescarHoja();
+  abrirSabana('#hoja-item');
+}
+
+/** Lo sacamos de verdad del pedido y lo guardamos aparte. Así ningún total lo
+ *  puede sumar por accidente: si no está en la lista, no está en la cuenta. */
+function quitarItem(pedido, item) {
+  const clave = claveItem(pedido, item);
+  const i = pedido.items.indexOf(item);
+  if (i >= 0) pedido.items.splice(i, 1);
+  estado.quitados.set(clave, item);
+  guardarLuego();
+  cerrarSabanas();
+  pintarArmado();
+}
+
+/** Saca un ítem buscándolo por su clave. Se usa al recuperar el avance, que
+ *  guarda las claves y no los ítems. No parte la clave en dos: el nombre del
+ *  cliente podría traer cualquier cosa, así que compara la clave entera. */
+function quitarPorClave(clave) {
+  for (const pedido of estado.lista.pedidos) {
+    const i = pedido.items.findIndex((it) => claveItem(pedido, it) === clave);
+    if (i >= 0) {
+      estado.quitados.set(clave, pedido.items[i]);
+      pedido.items.splice(i, 1);
+      return true;
+    }
+  }
+  return false;
+}
+
+function devolverItem(pedido, clave) {
+  const item = estado.quitados.get(clave);
+  if (!item) return;
+  pedido.items.push(item);
+  estado.quitados.delete(clave);
+  guardarLuego();
+  pintarArmado();
+}
+
+/** Un ítem hecho a mano, con la misma forma que los que salen de la lista. */
+function itemAgregado(a) {
+  const item = {
+    columnaIndice: a.columnaIndice,
+    nombreCorto: a.nombreCorto,
+    unidadCol: a.unidadCol || null,
+    sePesa: Boolean(a.sePesa),
+    textoCrudo: 'agregado a mano',
+    vacia: false,
+    cantidad: a.cantidad,
+    cantidadExplicita: true,
+    cantidadCosecha: a.cantidad,
+    unidad: a.unidad || null,
+    precioFijado: a.precioFijado === undefined ? null : a.precioFijado,
+    nota: '',
+    confianza: 'verde',
+    avisos: [],
+    pesoReal: null,
+    precioFinal: 0,
+    estimado: false,
+    basePrecio: 'lista',
+    agregado: true,
+  };
+  recalcularItem(item);
+  return item;
+}
+
+let pedidoParaAgregar = null;
+
+function abrirAgregar(pedido) {
+  pedidoParaAgregar = pedido;
+  $('#agregar-titulo').textContent = 'Agregar a la bolsa de ' + pedido.nombre;
+  $('#buscar-producto').value = '';
+  $('#otro-producto').open = false;
+  $('#nuevo-aviso').textContent = '';
+  for (const id of ['#nuevo-nombre', '#nuevo-unidad', '#nuevo-precio']) $(id).value = '';
+  $('#nuevo-cantidad').value = '1';
+  pintarListaAgregar();
+  abrirSabana('#hoja-agregar');
+}
+
+const normal = (s) => sinAcentos(String(s || '')).toLowerCase();
+
+function pintarListaAgregar() {
+  const pedido = pedidoParaAgregar;
+  if (!pedido) return;
+  const q = normal($('#buscar-producto').value.trim());
+  const yaTiene = new Set(pedido.items.map((i) => i.columnaIndice));
+  const cont = $('#lista-agregar');
+  cont.innerHTML = '';
+
+  const caja = crear('div', { className: 'tarjeta' });
+  let cuantos = 0;
+  for (const col of estado.lista.columnas) {
+    if (yaTiene.has(col.indice)) continue;              // ya lo tiene: no se duplica
+    if (q && !normal(col.nombreCorto).includes(q)) continue;
+    cuantos++;
+    const b = crear('button', { className: 'fila-agregar' });
+    const cuerpo = crear('span', { className: 'cuerpo' });
+    cuerpo.append(crear('b', { textContent: col.nombreCorto }));
+    cuerpo.append(crear('span', {
+      textContent: [col.precio === null ? 'sin precio' : moneda(col.precio), col.unidad || null]
+        .filter(Boolean).join(' · '),
+    }));
+    b.append(cuerpo, crear('span', { className: 'mas', textContent: '+' }));
+    b.addEventListener('click', () => agregarItem(pedido, {
+      claveCliente: pedido.claveCliente,
+      columnaIndice: col.indice,
+      nombreCorto: col.nombreCorto,
+      unidad: col.unidad, unidadCol: col.unidad, sePesa: col.sePesa,
+      cantidad: 1,
+    }));
+    caja.append(b);
+  }
+
+  if (!cuantos) {
+    cont.append(crear('p', {
+      className: 'ayuda',
+      textContent: q ? 'No hay ningún producto de la lista con ese nombre.'
+                     : 'Esta bolsa ya tiene todos los productos de la lista.',
+    }));
+    return;
+  }
+  cont.append(caja);
+}
+
+$('#buscar-producto').addEventListener('input', pintarListaAgregar);
+
+$('#btn-nuevo').addEventListener('click', () => {
+  const pedido = pedidoParaAgregar;
+  if (!pedido) return;
+  const nombre = $('#nuevo-nombre').value.trim();
+  const cantidad = Number($('#nuevo-cantidad').value.replace(',', '.'));
+  const precio = Number($('#nuevo-precio').value.replace(',', '.'));
+  const aviso = $('#nuevo-aviso');
+
+  if (!nombre) { aviso.textContent = 'Ponele un nombre.'; return; }
+  if (!Number.isFinite(cantidad) || cantidad <= 0) { aviso.textContent = 'La cantidad tiene que ser mayor que cero.'; return; }
+  if (!Number.isFinite(precio) || precio < 0) { aviso.textContent = 'Poné cuánto le vas a cobrar.'; return; }
+
+  agregarItem(pedido, {
+    claveCliente: pedido.claveCliente,
+    columnaIndice: proximoIdLibre(),     // negativo: no choca con ninguna columna
+    nombreCorto: nombre,
+    unidad: $('#nuevo-unidad').value.trim() || null,
+    unidadCol: $('#nuevo-unidad').value.trim() || null,
+    sePesa: false,
+    cantidad,
+    precioFijado: precio,                // es el total, no se multiplica
+  });
+});
+
+function agregarItem(pedido, a) {
+  estado.agregados.push(a);
+  pedido.items.push(itemAgregado(a));
+  guardarLuego();
+  cerrarSabanas();
+  pintarArmado();
 }
 
 function mostrarBolsa(i) {
@@ -958,6 +1315,9 @@ function guardarLuego() {
       ordenPuntos: estado.ordenPuntos,
       cosechados: [...estado.tildados],
       enviadas: [...estado.enviadas],
+      quitados: [...estado.quitados.keys()],
+      manuales: Object.fromEntries(estado.preciosManuales),
+      agregados: estado.agregados,
     }).catch(() => {});
   }, 350);
 }
@@ -984,12 +1344,30 @@ async function recuperarAvance() {
     estado.enviadas = new Set(g.enviadas || []);
     estado.pesos = new Map(Object.entries(g.pesos || {}));
     if (g.ordenPuntos && g.ordenPuntos.length) estado.ordenPuntos = g.ordenPuntos;
+
+    // El orden importa: primero se vuelven a meter los agregados (uno de ellos
+    // puede estar quitado), después los precios a mano, y recién al final se
+    // sacan los quitados. Si no, buscaríamos ítems que todavía no existen.
+    estado.agregados = g.agregados || [];
+    for (const a of estado.agregados) {
+      const p = estado.lista.pedidos.find((x) => x.claveCliente === a.claveCliente);
+      if (p && !p.items.some((i) => i.columnaIndice === a.columnaIndice)) p.items.push(itemAgregado(a));
+    }
+
+    estado.preciosManuales = new Map(Object.entries(g.manuales || {}).map(([k, v]) => [k, Number(v)]));
+
     for (const p of estado.lista.pedidos) {
       for (const item of p.items) {
-        const peso = estado.pesos.get(claveItem(p, item));
+        const clave = claveItem(p, item);
+        const peso = estado.pesos.get(clave);
         if (peso !== undefined && peso !== null && peso !== '') item.pesoReal = Number(peso);
+        if (estado.preciosManuales.has(clave)) item.precioManual = estado.preciosManuales.get(clave);
       }
     }
+
+    estado.quitados = new Map();
+    for (const clave of g.quitados || []) quitarPorClave(clave);
+
     recalcular();
   } catch { /* si no hay base, se arranca de cero */ }
 }
@@ -1142,4 +1520,6 @@ $('#btn-copiar-cosecha').addEventListener('click', async () => {
 window.laHuerta = {
   cargar, estado, irA, pintarCosecha, pintarArmado, pintarCobros, pintarBalance,
   refrescarDeudas, mostrarBolsa, mostrarCuenta, abrirMas, cerrarMas,
+  quitarItem, devolverItem, agregarItem, ponerPrecio, recalcularItem, proximoIdLibre,
+  precioAutomatico, abrirItem, abrirAgregar,
 };

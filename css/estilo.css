@@ -219,6 +219,61 @@ button.aviso { display: block; width: 100%; text-align: left; font: inherit; fon
 .plata { flex: none; font-variant-numeric: tabular-nums; font-weight: 650; }
 .plata.estimado { color: var(--ambar); }
 
+/* El precio de cada item es un boton: se toca para rebajarlo o para sacar el
+   producto de la bolsa. Lleva el recuadro punteado para que se note que se
+   puede tocar, que si no parece texto muerto. */
+button.plata {
+  min-height: 46px; padding: 4px 10px; border-radius: 10px;
+  border: 1.5px dashed var(--linea); background: none; color: inherit;
+  font: inherit; font-weight: 650; font-variant-numeric: tabular-nums;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 1px; cursor: pointer;
+}
+button.plata.estimado { color: var(--ambar); border-color: var(--ambar); }
+button.plata.a-mano { border-style: solid; border-color: var(--verde); background: var(--verde-p); color: var(--tinta); }
+button.plata i {
+  font-style: normal; font-size: .62rem; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--verde);
+}
+
+/* ---------- tocar un producto de la bolsa ---------- */
+.item-donde { color: var(--suave); font-size: .88rem; margin: 0; }
+.peligro { background: var(--rojo-p); border: 1.5px solid var(--rojo); color: var(--rojo); font-weight: 650; }
+.boton.peligro { color: var(--rojo); }
+
+.agregar { border-style: dashed; color: var(--verde); font-weight: 650; justify-content: center; }
+
+/* Lo que sacaste de la bolsa queda a la vista, para poder devolverlo. */
+.quitados { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.quitados > b { font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: var(--suave); }
+.quitado {
+  display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 12px;
+  background: var(--tarjeta); border: 1px dashed var(--linea); border-radius: 10px;
+}
+.quitado > span { flex: 1; min-width: 0; color: var(--suave); text-decoration: line-through; font-size: .92rem; }
+.quitado > button {
+  flex: none; min-height: 40px; padding: 0 14px; border-radius: 9px;
+  border: 1.5px solid var(--linea); background: var(--papel); color: var(--tinta);
+  font: inherit; font-size: .85rem; font-weight: 650; cursor: pointer;
+}
+
+/* ---------- agregar un producto ---------- */
+.buscador {
+  width: 100%; min-height: 50px; padding: 0 14px; margin-bottom: 10px;
+  border: 1.5px solid var(--linea); border-radius: 12px;
+  background: var(--tarjeta); color: var(--tinta); font: inherit;
+}
+.fila-agregar {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 58px;
+  padding: 8px 14px; text-align: left; background: none; border: 0;
+  border-top: 1px solid var(--linea); color: inherit; font: inherit; cursor: pointer;
+}
+.tarjeta > .fila-agregar:first-child { border-top: 0; }
+.fila-agregar .cuerpo b { display: block; font-weight: 600; }
+.fila-agregar .cuerpo span { color: var(--suave); font-size: .8rem; }
+.fila-agregar .mas { flex: none; font-size: 1.3rem; color: var(--verde); font-weight: 700; }
+.otro-cuerpo { display: flex; flex-direction: column; gap: 8px; padding: 0 14px 14px; }
+.par { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
 /* la balanza: se toca sola, sin tildar la fila */
 .balanza { flex: none; display: flex; align-items: center; gap: 4px; }
 .balanza input {

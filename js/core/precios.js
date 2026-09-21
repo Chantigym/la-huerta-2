@@ -26,6 +26,14 @@ export function precioDePesada(col) {
 export function calcularItem(item, col, pesoReal = null) {
   if (!item || item.vacia) return null;
 
+  // Un precio puesto a mano en el armado gana sobre todo lo demas: es una
+  // decision tuya (una rebaja, un arreglo) y no se tiene que mover cuando
+  // despues cargas los kilos. Se compara contra null/undefined y no con un
+  // "if" pelado porque 0 es un precio valido: algo que va de regalo.
+  if (item.precioManual !== null && item.precioManual !== undefined) {
+    return { precio: item.precioManual, estimado: false, base: 'manual' };
+  }
+
   if (item.precioFijado !== null && item.precioFijado !== undefined) {
     return { precio: item.precioFijado, estimado: false, base: 'celda' };
   }
