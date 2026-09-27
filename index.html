@@ -50,6 +50,86 @@
     </div>
   </section>
 
+  <!-- ============ LISTA DE PRODUCTOS (la que mandás) ============ -->
+  <section class="pantalla" id="p-productos" hidden>
+    <div class="franja">
+      <b>Lista de productos</b>
+      <span id="resumen-productos"></span>
+    </div>
+    <!-- Los botones arriba: a esta pantalla se entra para mandar la lista,
+         no para leerla. Si van al final hay que pasar 45 productos. -->
+    <div class="acciones no-imprime">
+      <button class="boton" id="btn-copiar-productos">Copiar para WhatsApp</button>
+      <button class="boton fantasma" id="btn-pdf-productos">Guardar PDF</button>
+    </div>
+    <div id="hoja-productos"></div>
+    <div class="cierre-pantalla no-imprime">
+      <details class="plegable">
+        <summary>Ver el texto que se copia</summary>
+        <pre id="texto-productos"></pre>
+      </details>
+      <details class="plegable">
+        <summary>Qué dice arriba y abajo</summary>
+        <div class="otro-cuerpo">
+          <label class="fila-campo columna"><span>Arriba</span>
+            <input type="text" id="cat-encabezado"></label>
+          <label class="fila-campo columna"><span>Abajo</span>
+            <input type="text" id="cat-cierre"></label>
+          <p class="ayuda">Donde escribas <code>{fecha}</code> se pone la fecha de la lista.</p>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- ============ PEDIDO QUE LLEGÓ POR WHATSAPP ============ -->
+  <section class="pantalla pantalla-pager" id="p-pedido-nuevo" hidden>
+    <div class="franja">
+      <b>Pedido por WhatsApp</b>
+      <span>El que no entró por el form</span>
+    </div>
+
+    <div class="tarjeta campos">
+      <label class="fila-campo columna"><span>Nombre</span>
+        <input type="text" id="np-nombre" autocomplete="off"></label>
+      <div class="par">
+        <label class="fila-campo columna"><span>Teléfono</span>
+          <input type="tel" id="np-tel" inputmode="tel" autocomplete="off" placeholder="11 2233 4455"></label>
+        <label class="fila-campo columna"><span>Dónde retira</span>
+          <select id="np-punto"></select></label>
+      </div>
+    </div>
+
+    <h3 class="titulo">Qué pidió</h3>
+    <div id="np-borrador"></div>
+    <div id="np-aviso"></div>
+
+    <input type="search" id="np-buscar" class="buscador" placeholder="Buscar producto para agregar" autocomplete="off">
+    <div id="np-catalogo"></div>
+
+    <details class="plegable" id="np-otro">
+      <summary>Otro, que no está en la lista</summary>
+      <div class="otro-cuerpo">
+        <label class="fila-campo columna"><span>Qué es</span>
+          <input type="text" id="np-otro-nombre" placeholder="Dulce de leche"></label>
+        <div class="par">
+          <label class="fila-campo columna"><span>Cuánto</span>
+            <input type="number" id="np-otro-cantidad" value="1" min="0" step="0.5" inputmode="decimal"></label>
+          <label class="fila-campo columna"><span>Unidad</span>
+            <input type="text" id="np-otro-unidad" placeholder="frasco"></label>
+        </div>
+        <label class="fila-campo columna"><span>Cuánto le cobrás en total</span>
+          <input type="number" id="np-otro-precio" min="0" step="50" inputmode="numeric"></label>
+        <button class="boton fantasma" id="np-otro-agregar">Agregar al pedido</button>
+      </div>
+    </details>
+
+    <!-- Fijo abajo: el catálogo es largo y el botón tiene que estar siempre
+         a mano, no al final de 45 productos. -->
+    <div class="pager guardar-fijo no-imprime">
+      <button class="boton grande" id="btn-guardar-pedido">Guardar el pedido</button>
+    </div>
+  </section>
+
   <!-- ============ COSECHAR ============ -->
   <section class="pantalla" id="p-cosecha" hidden>
     <div class="franja pegajosa">
@@ -115,6 +195,8 @@
     <section class="grupo">
       <h3>Esta lista</h3>
       <button class="fila-boton" id="btn-revisar">Revisar precios y dudas<i id="pico-revisar"></i></button>
+      <button class="fila-boton" id="btn-ver-productos">Lista de productos para mandar</button>
+      <button class="fila-boton" id="btn-nuevo-pedido">Agregar un pedido de WhatsApp</button>
       <button class="fila-boton" id="btn-guardar-historial">Guardar la lista en el historial</button>
       <button class="fila-boton" id="btn-imprimir">Imprimir / Guardar PDF</button>
       <button class="fila-boton" id="btn-balance">Balance de la semana (PDF)</button>

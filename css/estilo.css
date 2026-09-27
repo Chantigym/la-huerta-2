@@ -273,6 +273,71 @@ button.plata i {
 .fila-agregar .mas { flex: none; font-size: 1.3rem; color: var(--verde); font-weight: 700; }
 .otro-cuerpo { display: flex; flex-direction: column; gap: 8px; padding: 0 14px 14px; }
 .par { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.otro-cuerpo code { font-size: .85em; background: var(--papel); padding: 1px 5px; border-radius: 5px; }
+
+/* ---------- la lista de productos que mandás ---------- */
+/* Filas finitas: es un papel para leer, no algo que se tilde. */
+.producto {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 7px 14px; border-top: 1px solid var(--linea);
+}
+.tarjeta > .producto:first-child { border-top: 0; }
+.producto .nombre { flex: 1; min-width: 0; }
+.producto .precio { font-variant-numeric: tabular-nums; font-weight: 650; }
+.producto .uni { color: var(--suave); font-size: .82rem; min-width: 3.6rem; }
+.producto.sin-precio .precio { color: var(--ambar); font-weight: 600; font-size: .85rem; }
+
+/* ---------- quién pidió cada cosa (cosecha) ---------- */
+.quienes {
+  flex: none; min-height: 46px; min-width: 46px; padding: 4px 10px; margin-right: 14px;
+  border: 1.5px dashed var(--linea); border-radius: 10px; background: none;
+  color: var(--suave); font: inherit; font-size: .85rem; font-weight: 650; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1;
+}
+.quienes i { font-style: normal; font-size: .6rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.quienes[aria-expanded="true"] { border-style: solid; border-color: var(--verde); color: var(--verde); }
+
+.pidieron { padding: 2px 14px 12px; background: var(--papel); border-top: 1px solid var(--linea); }
+.pidio { display: flex; align-items: baseline; gap: 8px; padding: 6px 0; }
+.pidio + .pidio { border-top: 1px solid var(--linea); }
+.pidio .cuanto { flex: none; min-width: 3.4rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pidio .quien { flex: 1; min-width: 0; }
+.pidio .donde { color: var(--suave); font-size: .76rem; letter-spacing: .04em; }
+.pidio .nota { color: var(--ambar); font-size: .82rem; flex-basis: 100%; }
+
+/* ---------- un pedido nuevo, a mano ---------- */
+.campos { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.fila-campo select {
+  min-height: 48px; padding: 0 10px; border: 1.5px solid var(--linea); border-radius: 10px;
+  background: var(--tarjeta); color: var(--tinta); font: inherit; width: 100%;
+}
+.borrador-fila {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 14px;
+  border-top: 1px solid var(--linea);
+}
+.tarjeta > .borrador-fila:first-child { border-top: 0; }
+.borrador-fila .cuerpo { flex: 1; min-width: 0; }
+.borrador-fila .cuerpo b { display: block; font-weight: 600; }
+.borrador-fila .cuerpo span { color: var(--suave); font-size: .8rem; }
+.pasos-cant { flex: none; display: flex; align-items: center; gap: 2px; }
+.pasos-cant button {
+  width: 42px; min-height: 42px; border: 1.5px solid var(--linea); border-radius: 9px;
+  background: var(--papel); color: var(--tinta); font: inherit; font-size: 1.2rem; cursor: pointer;
+}
+.pasos-cant .valor { min-width: 3.2rem; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+.borrador-fila .saca {
+  flex: none; width: 42px; min-height: 42px; border: 0; border-radius: 9px;
+  background: var(--rojo-p); color: var(--rojo); font: inherit; font-size: 1rem; cursor: pointer;
+}
+.borrador-total {
+  display: flex; align-items: baseline; gap: 10px; padding: 12px 14px;
+  border-top: 2px solid var(--tinta); font-weight: 700;
+}
+.borrador-total .monto { margin-left: auto; font-variant-numeric: tabular-nums; font-size: 1.15rem; }
+
+/* Guardar siempre a mano, sin scrollear todo el catálogo. */
+.guardar-fijo { padding: 7px 12px; }
+.guardar-fijo .boton { width: 100%; min-height: 50px; }
 
 /* la balanza: se toca sola, sin tildar la fila */
 .balanza { flex: none; display: flex; align-items: center; gap: 4px; }

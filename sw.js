@@ -7,7 +7,7 @@
 // Si tocás este archivo, subile el número a VERSION o el navegador sigue
 // usando lo viejo.
 
-const VERSION = 'lahuerta2-v2';
+const VERSION = 'lahuerta2-v3';
 
 const BASICOS = [
   './',
@@ -21,6 +21,7 @@ const BASICOS = [
   './js/core/celda.js',
   './js/core/precios.js',
   './js/core/cosecha.js',
+  './js/core/catalogo.js',
   './js/core/pedidos.js',
   './js/core/cobros.js',
   './js/core/formato.js',

@@ -19,11 +19,12 @@ import { leerPDF } from '../core/pdf-grilla.js';
 import { leerCSV } from '../core/csv.js';
 import { armarLista } from '../core/tabla.js';
 import { cosechaPorFamilia, textoDeCosecha } from '../core/cosecha.js';
+import { catalogo, textoDeCatalogo, renglonDeProducto } from '../core/catalogo.js';
 import { informePedidos, recalcularPedido } from '../core/pedidos.js';
 import { informeCobros, linkWhatsApp, productosSinAlias, balancePorPunto, PLANTILLAS } from '../core/cobros.js';
 import { ordenarParaBolsa } from '../core/categorias.js';
 import { calcularItem, totalPedido } from '../core/precios.js';
-import { moneda, fecha, sinAcentos } from '../core/formato.js';
+import { moneda, fecha, sinAcentos, claveCliente, telE164 } from '../core/formato.js';
 import { cuentaAJPG, nombreArchivo } from '../img/cuenta-jpg.js';
 import { armarZip } from '../img/zip.js';
 import { quienMeDebe, resumenParaHistorial, ESTADOS } from '../core/cuentacorriente.js';
@@ -67,6 +68,9 @@ const estado = {
   quitados: new Map(),         // clave -> el item, guardado para poder devolverlo
   preciosManuales: new Map(),  // clave -> precio puesto a mano
   agregados: [],               // los que no vinieron por el form
+  pedidosWhatsApp: [],         // pedidos enteros que no entraron por el form
+  borrador: { items: [] },      // el pedido que estas cargando ahora
+  catalogo: null,              // el saludo y el cierre de la lista de productos
 };
 
 // ---------- navegación ----------
@@ -156,6 +160,8 @@ async function cargar(archivo) {
     estado.quitados = new Map();
     estado.preciosManuales = new Map();
     estado.agregados = [];
+    estado.pedidosWhatsApp = [];
+    estado.borrador = { items: [] };
 
     await recuperarConfig();
     await recuperarAvance();
@@ -224,6 +230,23 @@ function pintarLista() {
   seguir.disabled = rojas > 0;
   seguir.addEventListener('click', () => { pintarCosecha(); irA('cosecha'); });
   cont.append(seguir);
+
+  // Las dos cosas que se hacen desde la lista y no son el circuito semanal.
+  const productos = crear('button', { className: 'fila-boton', textContent: 'Lista de productos para mandar' });
+  productos.addEventListener('click', () => { pintarProductos(); irA('productos'); });
+  cont.append(productos);
+
+  const nuevo = crear('button', { className: 'fila-boton', textContent: 'Agregar un pedido de WhatsApp' });
+  nuevo.addEventListener('click', abrirNuevoPedido);
+  cont.append(nuevo);
+
+  const deWa = estado.pedidosWhatsApp.length;
+  if (deWa) {
+    cont.append(crear('p', {
+      className: 'ayuda',
+      textContent: `${plural(deWa, 'pedido', 'pedidos')} de WhatsApp cargados a mano, además de los del form.`,
+    }));
+  }
 }
 
 // ---------- 2. revisar ----------
@@ -341,6 +364,355 @@ $('#btn-revisar').addEventListener('click', () => {
   if (estado.lista) irA('revisar');
 });
 
+/** Copia un texto y avisa en el propio botón. Si el navegador no da permiso
+ *  de portapapeles, al menos deja el texto seleccionado para copiarlo a mano. */
+async function copiarDe(idBoton, texto, idFuente) {
+  const boton = $(idBoton);
+  const antes = boton.textContent;
+  try {
+    await navigator.clipboard.writeText(texto);
+    boton.textContent = 'Copiado';
+  } catch {
+    const fuente = $(idFuente);
+    if (fuente) {
+      const r = document.createRange();
+      r.selectNodeContents(fuente);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(r);
+    }
+    boton.textContent = 'Copialo vos';
+  }
+  setTimeout(() => { boton.textContent = antes; }, 2000);
+}
+
+// ---------- la lista de productos: la que mandás para que pidan ----------
+// No es la cosecha. La cosecha son los pedidos que ya entraron; esto es lo que
+// hay en oferta, así que van TODOS los productos del form, también los que
+// todavía nadie pidió: son justamente los que se pueden pedir.
+
+const CATALOGO = {
+  encabezado: 'Lista de La Huerta del {fecha}',
+  cierre: 'Cualquier cosa me escribís.',
+};
+
+function textosDelCatalogo() {
+  const c = { ...CATALOGO, ...(estado.catalogo || {}) };
+  const dia = estado.lista ? diaDe(estado.lista.fecha) : '';
+  return {
+    encabezado: c.encabezado.replace(/\{fecha\}/g, dia).trim(),
+    cierre: c.cierre.replace(/\{fecha\}/g, dia).trim(),
+  };
+}
+
+function pintarProductos() {
+  if (!estado.lista) return;
+  const inf = catalogo(estado.lista);
+
+  const resumen = [plural(inf.total, 'producto', 'productos')];
+  if (inf.sinPrecio) resumen.push(plural(inf.sinPrecio, 'sin precio', 'sin precio'));
+  $('#resumen-productos').textContent = resumen.join(' · ') + ' · lista del ' + diaDe(estado.lista.fecha);
+
+  $('#texto-productos').textContent = textoDeCatalogo(inf, textosDelCatalogo());
+
+  const hoja = $('#hoja-productos');
+  hoja.innerHTML = '';
+
+  // El encabezado va en la hoja: en papel la fecha tiene que estar.
+  const enc = crear('div', { className: 'franja' });
+  enc.append(crear('b', { textContent: textosDelCatalogo().encabezado }));
+  hoja.append(enc);
+
+  for (const familia of inf.familias) {
+    hoja.append(crear('p', { className: 'rubro', textContent: familia.etiqueta }));
+    const caja = crear('div', { className: 'tarjeta' });
+    for (const p of familia.productos) {
+      const fila = crear('div', { className: 'producto' + (p.precio === null ? ' sin-precio' : '') });
+      fila.append(crear('span', { className: 'nombre', textContent: p.nombreCorto }));
+      fila.append(crear('span', {
+        className: 'uni',
+        textContent: p.unidad ? (p.unidad === 'c/u' ? 'cada uno' : p.unidad) : '',
+      }));
+      fila.append(crear('span', {
+        className: 'precio',
+        textContent: p.precio === null ? 'a confirmar' : moneda(p.precio),
+      }));
+      caja.append(fila);
+    }
+    hoja.append(caja);
+  }
+
+  if (inf.sinPrecio) {
+    hoja.append(crear('div', {
+      className: 'aviso revisar no-imprime',
+      textContent: `Hay ${plural(inf.sinPrecio, 'producto', 'productos')} sin precio. `
+        + 'En la lista salen como "a confirmar": cargales el precio en Revisar si no querés que salgan así.',
+    }));
+  }
+}
+
+for (const [id, campo] of [['#cat-encabezado', 'encabezado'], ['#cat-cierre', 'cierre']]) {
+  $(id).addEventListener('input', () => {
+    estado.catalogo = { ...CATALOGO, ...(estado.catalogo || {}), [campo]: $(id).value };
+    guardarConfig('catalogo', estado.catalogo).catch(() => {});
+    pintarProductos();
+  });
+}
+
+$('#btn-copiar-productos').addEventListener('click', () =>
+  copiarDe('#btn-copiar-productos', $('#texto-productos').textContent, '#texto-productos'));
+
+$('#btn-pdf-productos').addEventListener('click', () => window.print());
+
+$('#btn-ver-productos').addEventListener('click', () => {
+  cerrarSabanas();
+  if (!estado.lista) return;
+  pintarProductos();
+  irA('productos');
+});
+
+// ---------- un pedido que llegó por WhatsApp ----------
+// El form no es el único camino: siempre hay alguien que te escribe. Un pedido
+// cargado acá es un pedido como cualquier otro —entra en la cosecha, en el
+// armado y en los cobros— porque se mete en lista.pedidos con la misma forma
+// que los que salen del archivo. No hay un segundo circuito que mantener.
+
+/** Lo mínimo que hay que guardar de un ítem para poder rearmarlo mañana. */
+function registroDeItem(item) {
+  return {
+    columnaIndice: item.columnaIndice,
+    nombreCorto: item.nombreCorto,
+    unidad: item.unidad,
+    unidadCol: item.unidadCol,
+    sePesa: Boolean(item.sePesa),
+    cantidad: item.cantidad,
+    precioFijado: item.precioFijado === undefined ? null : item.precioFijado,
+  };
+}
+
+/** Rearma un pedido guardado y lo mete en la lista. */
+function reponerPedido(reg) {
+  const pedido = {
+    claveCliente: reg.claveCliente,
+    nombre: reg.nombre,
+    telMostrado: reg.telMostrado || '',
+    telE164: telE164(reg.telMostrado || ''),
+    puntoCodigo: reg.puntoCodigo || null,
+    marcaTemporal: '',
+    deWhatsApp: true,
+    items: (reg.items || []).map((a) => itemAgregado(a)),
+    total: 0,
+  };
+  recalcularPedido(pedido);
+  estado.lista.pedidos.push(pedido);
+  if (!estado.lista.clientes.some((c) => c.clave === pedido.claveCliente)) {
+    estado.lista.clientes.push({
+      clave: pedido.claveCliente, nombre: pedido.nombre,
+      telE164: pedido.telE164, telMostrado: pedido.telMostrado,
+      puntoHabitual: pedido.puntoCodigo,
+    });
+  }
+  return pedido;
+}
+
+/** Las cifras de la pantalla Lista salen de acá: hay que rehacerlas. */
+function refrescarResumen() {
+  const L = estado.lista;
+  L.resumen.pedidos = L.pedidos.length;
+  L.resumen.productosConPedido = L.columnas
+    .filter((c) => L.pedidos.some((p) => p.items.some((i) => i.columnaIndice === c.indice))).length;
+}
+
+function abrirNuevoPedido() {
+  cerrarSabanas();
+  if (!estado.lista) return;
+  estado.borrador = { items: [] };
+
+  $('#np-nombre').value = '';
+  $('#np-tel').value = '';
+  $('#np-buscar').value = '';
+  $('#np-otro').open = false;
+  for (const id of ['#np-otro-nombre', '#np-otro-unidad', '#np-otro-precio']) $(id).value = '';
+  $('#np-otro-cantidad').value = '1';
+  $('#np-aviso').innerHTML = '';
+
+  const sel = $('#np-punto');
+  sel.innerHTML = '';
+  for (const punto of estado.lista.puntos) {
+    sel.append(crear('option', { value: punto.codigo, textContent: punto.etiqueta }));
+  }
+  if (!estado.lista.puntos.length) sel.append(crear('option', { value: '', textContent: 'Sin punto de retiro' }));
+
+  pintarBorrador();
+  pintarCatalogoNuevo();
+  irA('pedido-nuevo');
+}
+
+function pintarBorrador() {
+  const cont = $('#np-borrador');
+  cont.innerHTML = '';
+  const items = estado.borrador.items;
+
+  if (!items.length) {
+    cont.append(crear('p', { className: 'ayuda', textContent: 'Todavía no le agregaste nada. Buscá abajo.' }));
+    return;
+  }
+
+  const caja = crear('div', { className: 'tarjeta' });
+  for (const item of items) {
+    const fila = crear('div', { className: 'borrador-fila' });
+
+    const cuerpo = crear('span', { className: 'cuerpo' });
+    cuerpo.append(crear('b', { textContent: item.nombreCorto }));
+    cuerpo.append(crear('span', { textContent: [item.unidad, moneda(item.precioFinal)].filter(Boolean).join(' · ') }));
+    fila.append(cuerpo);
+
+    // El paso: medio kilo para lo que va por peso, de uno para lo que se cuenta.
+    const paso = item.unidad === 'kg' ? 0.5 : 1;
+    const pasos = crear('span', { className: 'pasos-cant' });
+    const menos = crear('button', { textContent: '−' });
+    const valor = crear('span', { className: 'valor', textContent: numero(item.cantidad) });
+    const mas = crear('button', { textContent: '+' });
+    menos.setAttribute('aria-label', 'Menos ' + item.nombreCorto);
+    mas.setAttribute('aria-label', 'Más ' + item.nombreCorto);
+
+    const mover = (d) => {
+      const n = Math.round((item.cantidad + d) * 100) / 100;
+      if (n <= 0) return;
+      item.cantidad = n;
+      item.cantidadCosecha = n;
+      recalcularItem(item);
+      pintarBorrador();
+    };
+    menos.addEventListener('click', () => mover(-paso));
+    mas.addEventListener('click', () => mover(paso));
+    pasos.append(menos, valor, mas);
+    fila.append(pasos);
+
+    const saca = crear('button', { className: 'saca', textContent: '✕' });
+    saca.setAttribute('aria-label', 'Sacar ' + item.nombreCorto + ' del pedido');
+    saca.addEventListener('click', () => {
+      estado.borrador.items = estado.borrador.items.filter((x) => x !== item);
+      pintarBorrador();
+      pintarCatalogoNuevo();
+    });
+    fila.append(saca);
+    caja.append(fila);
+  }
+
+  const total = crear('div', { className: 'borrador-total' });
+  total.append(crear('span', { textContent: plural(items.length, 'producto', 'productos') }));
+  total.append(crear('span', {
+    className: 'monto',
+    textContent: moneda(items.reduce((a, i) => a + i.precioFinal, 0)),
+  }));
+  caja.append(total);
+  cont.append(caja);
+}
+
+function pintarCatalogoNuevo() {
+  const q = normal($('#np-buscar').value.trim());
+  const yaTiene = new Set(estado.borrador.items.map((i) => i.columnaIndice));
+  const cont = $('#np-catalogo');
+  cont.innerHTML = '';
+
+  const caja = crear('div', { className: 'tarjeta' });
+  let cuantos = 0;
+  for (const col of estado.lista.columnas) {
+    if (yaTiene.has(col.indice)) continue;
+    if (q && !normal(col.nombreCorto).includes(q)) continue;
+    cuantos++;
+    const b = crear('button', { className: 'fila-agregar' });
+    const cuerpo = crear('span', { className: 'cuerpo' });
+    cuerpo.append(crear('b', { textContent: col.nombreCorto }));
+    cuerpo.append(crear('span', { textContent: renglonDeProducto(col).replace(col.nombreCorto + ' ', '') }));
+    b.append(cuerpo, crear('span', { className: 'mas', textContent: '+' }));
+    b.addEventListener('click', () => {
+      estado.borrador.items.push(itemAgregado({
+        columnaIndice: col.indice, nombreCorto: col.nombreCorto,
+        unidad: col.unidad, unidadCol: col.unidad, sePesa: col.sePesa, cantidad: 1,
+      }));
+      pintarBorrador();
+      pintarCatalogoNuevo();
+    });
+    caja.append(b);
+  }
+
+  if (!cuantos) {
+    cont.append(crear('p', {
+      className: 'ayuda',
+      textContent: q ? 'Ningún producto de la lista se llama así.' : 'Ya le agregaste todos los productos.',
+    }));
+    return;
+  }
+  cont.append(caja);
+}
+
+$('#np-buscar').addEventListener('input', pintarCatalogoNuevo);
+
+$('#np-otro-agregar').addEventListener('click', () => {
+  const nombre = $('#np-otro-nombre').value.trim();
+  const cantidad = Number(String($('#np-otro-cantidad').value).replace(',', '.'));
+  const precio = Number(String($('#np-otro-precio').value).replace(',', '.'));
+  if (!nombre) { decir('#np-aviso', 'Al producto nuevo le falta el nombre.', 'revisar'); return; }
+  if (!Number.isFinite(cantidad) || cantidad <= 0) { decir('#np-aviso', 'La cantidad tiene que ser mayor que cero.', 'revisar'); return; }
+  if (!Number.isFinite(precio) || precio < 0) { decir('#np-aviso', 'Poné cuánto le vas a cobrar.', 'revisar'); return; }
+
+  // Índices negativos, como los productos libres del armado: así no chocan
+  // con ninguna columna del form.
+  const usados = estado.borrador.items.map((i) => i.columnaIndice).filter((n) => n < 0);
+  estado.borrador.items.push(itemAgregado({
+    columnaIndice: usados.length ? Math.min(...usados) - 1 : -1,
+    nombreCorto: nombre,
+    unidad: $('#np-otro-unidad').value.trim() || null,
+    unidadCol: $('#np-otro-unidad').value.trim() || null,
+    sePesa: false, cantidad, precioFijado: precio,
+  }));
+
+  for (const id of ['#np-otro-nombre', '#np-otro-unidad', '#np-otro-precio']) $(id).value = '';
+  $('#np-otro-cantidad').value = '1';
+  decir('#np-aviso', '');
+  pintarBorrador();
+});
+
+$('#btn-nuevo-pedido').addEventListener('click', abrirNuevoPedido);
+
+$('#btn-guardar-pedido').addEventListener('click', () => {
+  const nombre = $('#np-nombre').value.trim();
+  const tel = $('#np-tel').value.trim();
+  const punto = $('#np-punto').value || null;
+
+  if (!nombre) { decir('#np-aviso', 'Falta el nombre de quien pidió.', 'revisar'); return; }
+  if (!estado.borrador.items.length) { decir('#np-aviso', 'El pedido está vacío: agregale algo.', 'revisar'); return; }
+
+  const clave = claveCliente(nombre, tel);
+  if (estado.lista.pedidos.some((p) => p.claveCliente === clave)) {
+    decir('#np-aviso', `${nombre} ya tiene un pedido en esta lista. Si es otra persona, agregale el teléfono para diferenciarla; si querés sumarle cosas, hacelo desde Armar.`, 'mal');
+    return;
+  }
+
+  const reg = {
+    claveCliente: clave, nombre, telMostrado: tel, puntoCodigo: punto,
+    items: estado.borrador.items.map(registroDeItem),
+  };
+  estado.pedidosWhatsApp.push(reg);
+  const pedido = reponerPedido(reg);
+  refrescarResumen();
+  guardarLuego();
+
+  estado.borrador = { items: [] };
+  pintarLista();
+  pintarProductos();
+  pintarCosecha();
+  pintarArmado();
+  pintarCobros();
+
+  irA('lista');
+  decir('#estado-carga',
+    `Cargado el pedido de ${nombre}: ${plural(pedido.items.length, 'producto', 'productos')}, ${moneda(pedido.total)}.`,
+    'ok');
+});
+
 // ---------- 3. cosechar ----------
 $('#margen').addEventListener('change', () => {
   guardarConfig('margen', Number($('#margen').value) || 0).catch(() => {});
@@ -414,7 +786,49 @@ function filaCosecha(p, grupo, margen) {
   });
 
   fila.append(zona);
-  return fila;
+
+  // Quién pidió esto. El número de gente es el botón: en el campo sirve para
+  // saber si ese atado de más es de alguien o es tu margen de descarte.
+  const pedazo = document.createDocumentFragment();
+  const detalle = p.detalle || [];
+  if (detalle.length) {
+    const panel = crear('div', { className: 'pidieron', hidden: true });
+    panel.append(...filasDeQuienPidio(detalle));
+
+    const boton = crear('button', { className: 'quienes' });
+    boton.append(crear('span', { textContent: String(detalle.length) }),
+                 crear('i', { textContent: detalle.length === 1 ? 'pidió' : 'piden' }));
+    boton.setAttribute('aria-expanded', 'false');
+    boton.setAttribute('aria-label', `Ver quién pidió ${p.nombreCorto}`);
+    boton.addEventListener('click', () => {
+      const abierto = panel.hidden;
+      panel.hidden = !abierto;
+      boton.setAttribute('aria-expanded', String(abierto));
+    });
+
+    fila.append(boton);
+    pedazo.append(fila, panel);
+  } else {
+    pedazo.append(fila);
+  }
+  return pedazo;
+}
+
+/** Un renglón por persona: cuánto, quién, y dónde lo retira. */
+function filasDeQuienPidio(detalle) {
+  const etiquetas = new Map((estado.lista.puntos || []).map((x) => [x.codigo, x.etiqueta]));
+  return detalle
+    .slice()
+    .sort((a, b) => String(a.cliente).localeCompare(String(b.cliente), 'es'))
+    .map((d) => {
+      const fila = crear('div', { className: 'pidio' });
+      fila.append(crear('span', { className: 'cuanto', textContent: numero(d.cantidad) }));
+      fila.append(crear('span', { className: 'quien', textContent: d.cliente }));
+      const donde = etiquetas.get(d.punto) || d.punto;
+      if (donde) fila.append(crear('span', { className: 'donde', textContent: donde }));
+      if (d.nota) fila.append(crear('span', { className: 'nota', textContent: d.nota }));
+      return fila;
+    });
 }
 
 function marcarCosecha(total) {
@@ -1318,6 +1732,7 @@ function guardarLuego() {
       quitados: [...estado.quitados.keys()],
       manuales: Object.fromEntries(estado.preciosManuales),
       agregados: estado.agregados,
+      pedidosWhatsApp: estado.pedidosWhatsApp,
     }).catch(() => {});
   }, 350);
 }
@@ -1326,13 +1741,19 @@ async function recuperarConfig() {
   try {
     estado.alias = (await leerConfig('aliasProductos')) || {};
     estado.plantillas = { ...PLANTILLAS, ...((await leerConfig('plantillas')) || {}) };
+    estado.catalogo = { ...CATALOGO, ...((await leerConfig('catalogo')) || {}) };
   } catch {
     estado.alias = {};
     estado.plantillas = { ...PLANTILLAS };
+    estado.catalogo = { ...CATALOGO };
   }
   $('#pl-saludo').value = estado.plantillas.saludo;
   $('#pl-cierre').value = estado.plantillas.cierre;
   $('#pl-alias').value = estado.plantillas.aliasTransferencia;
+
+  estado.catalogo = { ...CATALOGO, ...(estado.catalogo || {}) };
+  $('#cat-encabezado').value = estado.catalogo.encabezado;
+  $('#cat-cierre').value = estado.catalogo.cierre;
 }
 
 async function recuperarAvance() {
@@ -1345,9 +1766,16 @@ async function recuperarAvance() {
     estado.pesos = new Map(Object.entries(g.pesos || {}));
     if (g.ordenPuntos && g.ordenPuntos.length) estado.ordenPuntos = g.ordenPuntos;
 
-    // El orden importa: primero se vuelven a meter los agregados (uno de ellos
+    // El orden importa: primero los pedidos enteros que no vinieron por el
+    // form, después los ítems agregados a bolsas que ya existían (uno de ellos
     // puede estar quitado), después los precios a mano, y recién al final se
     // sacan los quitados. Si no, buscaríamos ítems que todavía no existen.
+    estado.pedidosWhatsApp = g.pedidosWhatsApp || [];
+    for (const reg of estado.pedidosWhatsApp) {
+      if (!estado.lista.pedidos.some((p) => p.claveCliente === reg.claveCliente)) reponerPedido(reg);
+    }
+    if (estado.pedidosWhatsApp.length) refrescarResumen();
+
     estado.agregados = g.agregados || [];
     for (const a of estado.agregados) {
       const p = estado.lista.pedidos.find((x) => x.claveCliente === a.claveCliente);
@@ -1492,22 +1920,8 @@ $('#btn-balance').addEventListener('click', () => {
   setTimeout(() => document.body.classList.remove('imprimir-balance'), 800);
 });
 
-$('#btn-copiar-cosecha').addEventListener('click', async () => {
-  const boton = $('#btn-copiar-cosecha');
-  const texto = $('#texto-cosecha').textContent;
-  try {
-    await navigator.clipboard.writeText(texto);
-    boton.textContent = 'Copiado';
-  } catch {
-    const r = document.createRange();
-    r.selectNodeContents($('#texto-cosecha'));
-    const sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(r);
-    boton.textContent = 'Copialo vos';
-  }
-  setTimeout(() => { boton.textContent = 'Copiar para WhatsApp'; }, 2000);
-});
+$('#btn-copiar-cosecha').addEventListener('click', () =>
+  copiarDe('#btn-copiar-cosecha', $('#texto-cosecha').textContent, '#texto-cosecha'));
 
 // Al abrir: el margen guardado y el historial, para que "Deben" ya tenga datos.
 (async () => {
@@ -1522,4 +1936,6 @@ window.laHuerta = {
   refrescarDeudas, mostrarBolsa, mostrarCuenta, abrirMas, cerrarMas,
   quitarItem, devolverItem, agregarItem, ponerPrecio, recalcularItem, proximoIdLibre,
   precioAutomatico, abrirItem, abrirAgregar,
+  pintarProductos, pintarLista, abrirNuevoPedido, reponerPedido, refrescarResumen,
+  registroDeItem, itemAgregado, textosDelCatalogo,
 };
