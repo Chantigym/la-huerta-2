@@ -339,6 +339,37 @@ button.plata i {
 .guardar-fijo { padding: 7px 12px; }
 .guardar-fijo .boton { width: 100%; min-height: 50px; }
 
+/* ---------- pegar el pedido tal cual llegó ---------- */
+.pegar { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.pegar > label { font-size: .95rem; }
+.pegar textarea {
+  width: 100%; min-height: 130px; padding: 12px; resize: vertical;
+  border: 1.5px solid var(--linea); border-radius: 12px;
+  background: var(--papel); color: var(--tinta);
+  font: 15px/1.5 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+}
+.pegar textarea:focus { outline: 2px solid var(--verde); outline-offset: 1px; }
+.pegar .ayuda { margin: 0; }
+
+/* Los renglones que no pudo resolver solo. En ámbar, como todo lo que en esta
+   app espera que lo confirmes vos. */
+.pendiente {
+  background: var(--ambar-p); border: 1px solid var(--ambar); border-radius: 12px;
+  padding: 10px 12px; margin-bottom: 8px;
+}
+.pendiente .crudo { display: block; font-weight: 650; }
+.pendiente .porque { display: block; color: var(--suave); font-size: .84rem; margin-bottom: 8px; }
+.pendiente .opciones { display: flex; flex-wrap: wrap; gap: 6px; }
+.pendiente .opciones button {
+  min-height: 44px; padding: 0 12px; border-radius: 10px;
+  border: 1.5px solid var(--ambar); background: var(--tarjeta); color: var(--tinta);
+  font: inherit; font-size: .88rem; font-weight: 650; cursor: pointer;
+}
+.pendiente .opciones button.descartar {
+  border-color: var(--linea); color: var(--suave); font-weight: 400; margin-left: auto;
+}
+.resumen-lectura { margin-bottom: 8px; }
+
 /* la balanza: se toca sola, sin tildar la fila */
 .balanza { flex: none; display: flex; align-items: center; gap: 4px; }
 .balanza input {

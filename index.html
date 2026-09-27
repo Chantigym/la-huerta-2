@@ -99,12 +99,27 @@
       </div>
     </div>
 
+    <!-- El camino principal: pegar el mensaje tal cual llegó. -->
+    <div class="tarjeta pegar">
+      <label for="np-texto"><b>Pegá el pedido como te lo mandaron</b></label>
+      <textarea id="np-texto" rows="6" autocomplete="off"
+        placeholder="Hola! Te encargo:&#10;2 atados de acelga&#10;1 kg de papa&#10;medio kilo de nabo&#10;lechuga 3"></textarea>
+      <button class="boton" id="np-leer">Leer el pedido</button>
+      <p class="ayuda">Lo que entienda entra abajo. Lo que no, te lo pregunta: nunca lo adivina.</p>
+    </div>
+
     <h3 class="titulo">Qué pidió</h3>
+    <div id="np-pendientes"></div>
     <div id="np-borrador"></div>
     <div id="np-aviso"></div>
 
-    <input type="search" id="np-buscar" class="buscador" placeholder="Buscar producto para agregar" autocomplete="off">
-    <div id="np-catalogo"></div>
+    <details class="plegable" id="np-manual">
+      <summary>Agregar a mano, buscando en la lista</summary>
+      <div class="otro-cuerpo">
+        <input type="search" id="np-buscar" class="buscador" placeholder="Buscar producto" autocomplete="off">
+        <div id="np-catalogo"></div>
+      </div>
+    </details>
 
     <details class="plegable" id="np-otro">
       <summary>Otro, que no está en la lista</summary>

@@ -20,6 +20,7 @@ import { leerCSV } from '../core/csv.js';
 import { armarLista } from '../core/tabla.js';
 import { cosechaPorFamilia, textoDeCosecha } from '../core/cosecha.js';
 import { catalogo, textoDeCatalogo, renglonDeProducto } from '../core/catalogo.js';
+import { leerPedidoDeTexto } from '../core/leer-pedido.js';
 import { informePedidos, recalcularPedido } from '../core/pedidos.js';
 import { informeCobros, linkWhatsApp, productosSinAlias, balancePorPunto, PLANTILLAS } from '../core/cobros.js';
 import { ordenarParaBolsa } from '../core/categorias.js';
@@ -69,7 +70,7 @@ const estado = {
   preciosManuales: new Map(),  // clave -> precio puesto a mano
   agregados: [],               // los que no vinieron por el form
   pedidosWhatsApp: [],         // pedidos enteros que no entraron por el form
-  borrador: { items: [] },      // el pedido que estas cargando ahora
+  borrador: { items: [], pendientes: [] },  // el pedido que estas cargando ahora
   catalogo: null,              // el saludo y el cierre de la lista de productos
 };
 
@@ -161,7 +162,7 @@ async function cargar(archivo) {
     estado.preciosManuales = new Map();
     estado.agregados = [];
     estado.pedidosWhatsApp = [];
-    estado.borrador = { items: [] };
+    estado.borrador = { items: [], pendientes: [] };
 
     await recuperarConfig();
     await recuperarAvance();
@@ -526,7 +527,7 @@ function refrescarResumen() {
 function abrirNuevoPedido() {
   cerrarSabanas();
   if (!estado.lista) return;
-  estado.borrador = { items: [] };
+  estado.borrador = { items: [], pendientes: [] };
 
   $('#np-nombre').value = '';
   $('#np-tel').value = '';
@@ -535,6 +536,8 @@ function abrirNuevoPedido() {
   for (const id of ['#np-otro-nombre', '#np-otro-unidad', '#np-otro-precio']) $(id).value = '';
   $('#np-otro-cantidad').value = '1';
   $('#np-aviso').innerHTML = '';
+  $('#np-texto').value = '';
+  $('#np-manual').open = false;
 
   const sel = $('#np-punto');
   sel.innerHTML = '';
@@ -543,6 +546,7 @@ function abrirNuevoPedido() {
   }
   if (!estado.lista.puntos.length) sel.append(crear('option', { value: '', textContent: 'Sin punto de retiro' }));
 
+  pintarPendientes();
   pintarBorrador();
   pintarCatalogoNuevo();
   irA('pedido-nuevo');
@@ -650,6 +654,112 @@ function pintarCatalogoNuevo() {
 
 $('#np-buscar').addEventListener('input', pintarCatalogoNuevo);
 
+// ----- leer el pedido pegado -----
+// Lo que se entiende entra directo al borrador. Lo que no, queda arriba en
+// ámbar hasta que lo resolvés: ni se pierde ni se inventa.
+$('#np-leer').addEventListener('click', () => {
+  const texto = $('#np-texto').value;
+  if (!texto.trim()) { decir('#np-aviso', 'Pegá el mensaje en la caja de arriba.', 'revisar'); return; }
+
+  const inf = leerPedidoDeTexto(texto, estado.lista.columnas);
+  if (!inf.renglones.length) {
+    decir('#np-aviso', 'No encontré ningún producto en ese mensaje. Podés agregarlos a mano.', 'revisar');
+    return;
+  }
+
+  const yaTiene = new Set(estado.borrador.items.map((i) => i.columnaIndice));
+  let entraron = 0;
+  let repetidos = 0;
+
+  for (const r of inf.renglones) {
+    if (r.estado !== 'ok') { estado.borrador.pendientes.push(r); continue; }
+    if (yaTiene.has(r.columnaIndice)) { repetidos++; continue; }
+    agregarAlBorrador(r.columnaIndice, r.cantidad);
+    yaTiene.add(r.columnaIndice);
+    entraron++;
+  }
+
+  const partes = [];
+  if (entraron) partes.push(plural(entraron, 'producto entró', 'productos entraron'));
+  if (repetidos) partes.push(plural(repetidos, 'ya estaba', 'ya estaban'));
+  const pendientes = estado.borrador.pendientes.length;
+  if (pendientes) partes.push(plural(pendientes, 'te lo pregunto abajo', 'te los pregunto abajo'));
+
+  decir('#np-aviso', partes.join(' · ') || 'No entró nada.', pendientes ? 'revisar' : 'ok');
+  $('#np-texto').value = '';
+  pintarPendientes();
+  pintarBorrador();
+  pintarCatalogoNuevo();
+});
+
+/** Mete un producto de la lista en el borrador, con su cantidad. */
+function agregarAlBorrador(columnaIndice, cantidad) {
+  const col = estado.lista.columnas.find((c) => c.indice === columnaIndice);
+  if (!col) return;
+  estado.borrador.items.push(itemAgregado({
+    columnaIndice: col.indice, nombreCorto: col.nombreCorto,
+    unidad: col.unidad, unidadCol: col.unidad, sePesa: col.sePesa,
+    cantidad: cantidad > 0 ? cantidad : 1,
+  }));
+}
+
+/** Los renglones que el lector no pudo resolver solo. */
+function pintarPendientes() {
+  const cont = $('#np-pendientes');
+  cont.innerHTML = '';
+  const lista = estado.borrador.pendientes;
+  if (!lista.length) return;
+
+  cont.append(crear('div', {
+    className: 'aviso revisar resumen-lectura',
+    textContent: `${plural(lista.length, 'renglón', 'renglones')} que no puedo resolver solo. Decime cuál es cada uno.`,
+  }));
+
+  const sacar = (r) => {
+    estado.borrador.pendientes = estado.borrador.pendientes.filter((x) => x !== r);
+    pintarPendientes();
+    pintarBorrador();
+    pintarCatalogoNuevo();
+  };
+
+  for (const r of lista) {
+    const caja = crear('div', { className: 'pendiente' });
+    caja.append(crear('span', { className: 'crudo', textContent: r.crudo }));
+    caja.append(crear('span', { className: 'porque', textContent: r.aviso }));
+
+    const opciones = crear('div', { className: 'opciones' });
+    const yaTiene = new Set(estado.borrador.items.map((i) => i.columnaIndice));
+
+    // Si hay candidatos, se elige tocando: es lo más rápido en el celular.
+    for (const c of r.candidatos) {
+      if (yaTiene.has(c.indice)) continue;
+      const b = crear('button', { textContent: `${numero(r.cantidad)} ${c.nombreCorto}` });
+      b.addEventListener('click', () => { agregarAlBorrador(c.indice, r.cantidad); sacar(r); });
+      opciones.append(b);
+    }
+
+    // Y si no lo reconoció, se lo busca a mano con el nombre ya puesto.
+    if (!r.candidatos.length) {
+      const buscar = crear('button', { textContent: 'Buscarlo en la lista' });
+      buscar.addEventListener('click', () => {
+        $('#np-manual').open = true;
+        $('#np-buscar').value = r.consulta;
+        pintarCatalogoNuevo();
+        $('#np-buscar').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      opciones.append(buscar);
+    }
+
+    const fuera = crear('button', { className: 'descartar', textContent: 'No va' });
+    fuera.setAttribute('aria-label', 'Descartar el renglón: ' + r.crudo);
+    fuera.addEventListener('click', () => sacar(r));
+    opciones.append(fuera);
+
+    caja.append(opciones);
+    cont.append(caja);
+  }
+}
+
 $('#np-otro-agregar').addEventListener('click', () => {
   const nombre = $('#np-otro-nombre').value.trim();
   const cantidad = Number(String($('#np-otro-cantidad').value).replace(',', '.'));
@@ -685,6 +795,18 @@ $('#btn-guardar-pedido').addEventListener('click', () => {
   if (!nombre) { decir('#np-aviso', 'Falta el nombre de quien pidió.', 'revisar'); return; }
   if (!estado.borrador.items.length) { decir('#np-aviso', 'El pedido está vacío: agregale algo.', 'revisar'); return; }
 
+  // Guardar con renglones sin resolver es perder parte del pedido en silencio.
+  // Se puede hacer igual, pero hay que decirlo dos veces.
+  const pend = estado.borrador.pendientes.length;
+  if (pend && !$('#btn-guardar-pedido').dataset.insistiendo) {
+    $('#btn-guardar-pedido').dataset.insistiendo = '1';
+    decir('#np-aviso',
+      `Te quedan ${plural(pend, 'renglón', 'renglones')} sin resolver arriba: si guardás así, no entran. Tocá Guardar otra vez para guardar igual.`,
+      'revisar');
+    return;
+  }
+  delete $('#btn-guardar-pedido').dataset.insistiendo;
+
   const clave = claveCliente(nombre, tel);
   if (estado.lista.pedidos.some((p) => p.claveCliente === clave)) {
     decir('#np-aviso', `${nombre} ya tiene un pedido en esta lista. Si es otra persona, agregale el teléfono para diferenciarla; si querés sumarle cosas, hacelo desde Armar.`, 'mal');
@@ -700,7 +822,7 @@ $('#btn-guardar-pedido').addEventListener('click', () => {
   refrescarResumen();
   guardarLuego();
 
-  estado.borrador = { items: [] };
+  estado.borrador = { items: [], pendientes: [] };
   pintarLista();
   pintarProductos();
   pintarCosecha();
@@ -1935,6 +2057,7 @@ window.laHuerta = {
   cargar, estado, irA, pintarCosecha, pintarArmado, pintarCobros, pintarBalance,
   refrescarDeudas, mostrarBolsa, mostrarCuenta, abrirMas, cerrarMas,
   quitarItem, devolverItem, agregarItem, ponerPrecio, recalcularItem, proximoIdLibre,
+  pintarPendientes, agregarAlBorrador,
   precioAutomatico, abrirItem, abrirAgregar,
   pintarProductos, pintarLista, abrirNuevoPedido, reponerPedido, refrescarResumen,
   registroDeItem, itemAgregado, textosDelCatalogo,
